@@ -40,13 +40,6 @@ h1 {
   font-size: 1.3rem;
   margin: 4px 0 20px;
 }
-h1 .model {
-  display: block;
-  font-size: 0.75rem;
-  font-weight: 400;
-  color: #6b6f76;
-  letter-spacing: 0.05em;
-}
 
 .calc {
   background: linear-gradient(180deg, var(--calc-body), var(--calc-body-dark));
