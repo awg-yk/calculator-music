@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>AR-7778 風 演奏電卓</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧮</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="page">
+    <h1>電卓ミュージック <span class="model">— AR-7778 style —</span></h1>
+
+    <div class="calc" id="calc">
+      <div class="calc-top">
+        <div class="solar" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+        <div class="brand">AR-7778</div>
+      </div>
+
+      <div class="screen">
+        <div class="screen-icons">
+          <span id="icon-music" class="icon">♪ MUSIC</span>
+          <span id="icon-note" class="icon note-name"></span>
+        </div>
+        <div class="display" id="display">0.</div>
+      </div>
+
+      <div class="mode-row">
+        <button class="key key-mode" id="modeToggle" data-label="演奏モード">
+          <span class="key-main">MU</span>
+          <span class="key-sub">演奏モード</span>
+        </button>
+        <div class="tone-controls">
+          <label class="tone-field">
+            音色
+            <select id="waveSelect">
+              <option value="square" selected>ピコピコ (square)</option>
+              <option value="triangle">やわらか (triangle)</option>
+              <option value="sine">サイン波 (sine)</option>
+            </select>
+          </label>
+          <label class="tone-field">
+            音量
+            <input type="range" id="volumeRange" min="0" max="1" step="0.01" value="0.5">
+          </label>
+        </div>
+      </div>
+
+      <div class="func-keys">
+        <button class="key key-fn" data-fn="ac">AC</button>
+        <button class="key key-fn" data-fn="percent">%</button>
+        <button class="key key-fn" data-fn="sqrt">√</button>
+        <button class="key key-fn" data-fn="mrc">MRC</button>
+        <button class="key key-fn" data-fn="mminus">M−</button>
+        <button class="key key-fn" data-fn="mplus">M+</button>
+      </div>
+
+      <div class="keys">
+        <button class="key key-num" data-note="B4" data-digit="7">7</button>
+        <button class="key key-num" data-note="C5" data-digit="8">8</button>
+        <button class="key key-num" data-note="D5" data-digit="9">9</button>
+        <button class="key key-op" data-note="E5" data-op="÷">÷</button>
+
+        <button class="key key-num" data-note="F4" data-digit="4">4</button>
+        <button class="key key-num" data-note="G4" data-digit="5">5</button>
+        <button class="key key-num" data-note="A4" data-digit="6">6</button>
+        <button class="key key-op" data-note="F5" data-op="×">×</button>
+
+        <button class="key key-num" data-note="C4" data-digit="1">1</button>
+        <button class="key key-num" data-note="D4" data-digit="2">2</button>
+        <button class="key key-num" data-note="E4" data-digit="3">3</button>
+        <button class="key key-op" data-note="G5" data-op="−">−</button>
+
+        <button class="key key-num key-zero" data-digit="0">0</button>
+        <button class="key key-num" data-digit="00">00</button>
+        <button class="key key-num" data-digit=".">.</button>
+        <button class="key key-op key-plus" data-note="A5" data-op="+">+</button>
+
+        <button class="key key-eq key-note" data-note="B5" data-eq="=">=</button>
+      </div>
+    </div>
+
+    <section class="legend">
+      <h2>あそびかた</h2>
+      <ul>
+        <li><b>MU</b> ボタンで「演奏モード」に切り替えると、数字・演算子キーがドレミの鍵盤になります(もう一度押すと普通の電卓に戻ります)。</li>
+        <li>キーの並びは実機と同じ:<code>1〜7</code>がド〜シ(低いオクターブ)、<code>8, 9, ÷, ×, −, +, =</code>が1オクターブ上のド〜シです。</li>
+        <li>PCキーボードでも演奏できます:数字キー <code>1234567890</code>、記号キー <code>+ - * / =</code> に対応。</li>
+        <li>スマホ・タブレットではマルチタッチ対応なので、和音っぽく複数キー同時押しも可能です。</li>
+        <li>音色(square / triangle / sine)と音量は上部のコントロールで調整できます。実機のピエゾブザーに近いのは <b>square</b> です。</li>
+        <li>演奏モードでない時は、ふつうの電卓として四則演算・%・√・メモリー機能が使えます。</li>
+      </ul>
+      <p class="note">
+        ※ このサイトは実機の仕様に関する公開情報(ブログ・製品ページ・検索結果)を基に再現したもので、
+        実際のサンプル音源やキー配列と細部が異なる可能性があります。お手元の実機と違いがあれば教えてください。
+      </p>
+    </section>
+  </main>
+  <script src="script.js"></script>
+</body>
+</html>
