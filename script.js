@@ -55,7 +55,36 @@
     return NOTE_FREQ[shifted] ? shifted : note;
   }
 
-  function playNote(note) {
+  // A cheap piezo buzzer is driven by a raw digital square/pulse signal with
+  // no smoothing, so it sounds thin and bright rather than a "clean" square
+  // wave. A narrow-duty pulse (~20%) keeps more high harmonics than a 50%
+  // square, which is closer to that thin/tinny character.
+  let piezoWave = null;
+  function getPiezoWave(ctx) {
+    if (piezoWave) return piezoWave;
+    const N = 32;
+    const real = new Float32Array(N);
+    const imag = new Float32Array(N);
+    const duty = 0.22;
+    for (let n = 1; n < N; n++) {
+      imag[n] = (2 / (n * Math.PI)) * Math.sin(n * Math.PI * duty);
+    }
+    piezoWave = ctx.createPeriodicWave(real, imag, { disableNormalization: false });
+    return piezoWave;
+  }
+
+  function applyWaveform(osc, ctx) {
+    const val = waveSelect.value;
+    if (val === "piezo") osc.setPeriodicWave(getPiezoWave(ctx));
+    else osc.type = val;
+  }
+
+  // Active notes, keyed by the button element currently sounding it, so a
+  // key can be held (sustained) and multiple keys can sound at once.
+  const activeVoices = new Map();
+
+  function startVoice(voiceId, note) {
+    if (activeVoices.has(voiceId)) return;
     const ctx = getCtx();
     const actualNote = shiftNote(note);
     const freq = NOTE_FREQ[actualNote];
@@ -63,24 +92,53 @@
 
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = waveSelect.value;
+    applyWaveform(osc, ctx);
     osc.frequency.value = freq;
 
+    // Piezo elements have almost no bass response and a bright resonant
+    // peak roughly in the 2.5-3.5kHz range; a highpass + peaking filter
+    // pushes the synthesized tone toward that harsh, tinny character.
+    const highpass = ctx.createBiquadFilter();
+    highpass.type = "highpass";
+    highpass.frequency.value = 220;
+
+    const peak_filter = ctx.createBiquadFilter();
+    peak_filter.type = "peaking";
+    peak_filter.frequency.value = 3000;
+    peak_filter.Q.value = 1.1;
+    peak_filter.gain.value = 9;
+
+    const gain = ctx.createGain();
     const peak = parseFloat(volumeRange.value);
     gain.gain.setValueAtTime(0, now);
-    gain.gain.linearRampToValueAtTime(peak, now + 0.008);
-    gain.gain.setValueAtTime(peak, now + 0.12);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+    // Near-instant attack: a real buzzer just gets switched on.
+    gain.gain.linearRampToValueAtTime(peak, now + 0.004);
 
-    osc.connect(gain).connect(ctx.destination);
+    osc.connect(highpass).connect(peak_filter).connect(gain).connect(ctx.destination);
     osc.start(now);
-    osc.stop(now + 0.24);
+
+    activeVoices.set(voiceId, { osc, gain });
 
     iconNote.textContent = noteLabel(actualNote) + " (" + actualNote + ")";
     iconNote.classList.add("active");
-    clearTimeout(playNote._t);
-    playNote._t = setTimeout(() => iconNote.classList.remove("active"), 500);
+  }
+
+  function stopVoice(voiceId) {
+    const voice = activeVoices.get(voiceId);
+    if (!voice) return;
+    const ctx = getCtx();
+    const now = ctx.currentTime;
+    voice.gain.gain.cancelScheduledValues(now);
+    voice.gain.gain.setValueAtTime(voice.gain.gain.value, now);
+    // Short release so the cutoff isn't an audible click, but still snappy.
+    voice.gain.gain.linearRampToValueAtTime(0, now + 0.03);
+    voice.osc.stop(now + 0.04);
+    activeVoices.delete(voiceId);
+    if (activeVoices.size === 0) iconNote.classList.remove("active");
+  }
+
+  function stopAllVoices() {
+    activeVoices.forEach((_voice, voiceId) => stopVoice(voiceId));
   }
 
   function playClick() {
@@ -219,12 +277,15 @@
     setTimeout(() => btn.classList.remove("pressed"), 120);
   }
 
-  function handleKeyActivate(btn) {
+  // Key-down: in music mode this starts a sustained note (or a one-shot
+  // click / calculator function); in calculator mode it's the usual
+  // one-shot digit/operator entry.
+  function handleKeyDown(btn) {
     pressVisual(btn);
 
     if (musicMode) {
       if (btn.dataset.note) {
-        playNote(btn.dataset.note);
+        startVoice(btn, btn.dataset.note);
       } else if (btn.dataset.digit === "0") {
         playClick();
       }
@@ -249,12 +310,27 @@
     }
   }
 
+  // Key-up: only matters in music mode, to stop a sustained note.
+  function handleKeyUp(btn) {
+    if (musicMode && btn.dataset.note) stopVoice(btn);
+  }
+
   document.querySelectorAll(".key").forEach((btn) => {
     btn.addEventListener("pointerdown", (e) => {
       e.preventDefault();
+      btn.setPointerCapture(e.pointerId);
       getCtx();
-      handleKeyActivate(btn);
+      handleKeyDown(btn);
     });
+    btn.addEventListener("pointerup", () => handleKeyUp(btn));
+    btn.addEventListener("pointercancel", () => handleKeyUp(btn));
+  });
+
+  // If the tab loses focus while a key is physically held, the pointerup
+  // may never arrive - stop everything rather than leave a note droning.
+  window.addEventListener("blur", stopAllVoices);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) stopAllVoices();
   });
 
   // ---------- PC keyboard support ----------
@@ -281,7 +357,11 @@
     heldKeys.add(e.key);
     e.preventDefault();
     getCtx();
-    handleKeyActivate(btn);
+    handleKeyDown(btn);
   });
-  window.addEventListener("keyup", (e) => heldKeys.delete(e.key));
+  window.addEventListener("keyup", (e) => {
+    heldKeys.delete(e.key);
+    const btn = KEYMAP[e.key] || OP_KEYMAP[e.key];
+    if (btn) handleKeyUp(btn);
+  });
 })();
