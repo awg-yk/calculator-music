@@ -173,6 +173,66 @@ h1 .model {
   font-size: 0.75rem;
 }
 
+.tune-panel {
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  font-size: 0.75rem;
+}
+.tune-panel summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: #3a3f47;
+}
+.tune-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 14px;
+  margin-top: 10px;
+}
+.tune-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.65rem;
+  color: #40454c;
+}
+.tune-field input[type="range"] {
+  width: 100%;
+}
+.tune-field output {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+.tune-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.tune-copy-btn {
+  padding: 8px 12px;
+  font-size: 0.7rem;
+}
+.tune-copy-feedback {
+  font-size: 0.7rem;
+  color: #2c8a4d;
+  font-weight: 700;
+}
+.tune-settings-text {
+  width: 100%;
+  margin-top: 8px;
+  font-family: monospace;
+  font-size: 0.65rem;
+  resize: vertical;
+  border-radius: 6px;
+  border: 1px solid rgba(0,0,0,0.15);
+  padding: 4px 6px;
+}
+
 .func-keys {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

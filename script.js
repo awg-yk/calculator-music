@@ -8,6 +8,16 @@
   const iconNote = document.getElementById("icon-note");
   const waveSelect = document.getElementById("waveSelect");
   const volumeRange = document.getElementById("volumeRange");
+  const dutyRange = document.getElementById("dutyRange");
+  const highpassRange = document.getElementById("highpassRange");
+  const peakFreqRange = document.getElementById("peakFreqRange");
+  const peakQRange = document.getElementById("peakQRange");
+  const peakGainRange = document.getElementById("peakGainRange");
+  const attackRange = document.getElementById("attackRange");
+  const releaseRange = document.getElementById("releaseRange");
+  const copySettingsBtn = document.getElementById("copySettings");
+  const copyFeedback = document.getElementById("copyFeedback");
+  const settingsText = document.getElementById("settingsText");
 
   const SOLFEGE = { C: "ド", D: "レ", E: "ミ", F: "ファ", G: "ソ", A: "ラ", B: "シ" };
 
@@ -57,19 +67,22 @@
 
   // A cheap piezo buzzer is driven by a raw digital square/pulse signal with
   // no smoothing, so it sounds thin and bright rather than a "clean" square
-  // wave. A narrow-duty pulse (~20%) keeps more high harmonics than a 50%
-  // square, which is closer to that thin/tinny character.
+  // wave. A narrow-duty pulse keeps more high harmonics than a 50% square,
+  // which is closer to that thin/tinny character. The duty cycle (and the
+  // filter shaping below) are user-adjustable via the tuning panel.
   let piezoWave = null;
+  let piezoWaveDuty = null;
   function getPiezoWave(ctx) {
-    if (piezoWave) return piezoWave;
+    const duty = parseFloat(dutyRange.value);
+    if (piezoWave && piezoWaveDuty === duty) return piezoWave;
     const N = 32;
     const real = new Float32Array(N);
     const imag = new Float32Array(N);
-    const duty = 0.22;
     for (let n = 1; n < N; n++) {
       imag[n] = (2 / (n * Math.PI)) * Math.sin(n * Math.PI * duty);
     }
     piezoWave = ctx.createPeriodicWave(real, imag, { disableNormalization: false });
+    piezoWaveDuty = duty;
     return piezoWave;
   }
 
@@ -96,23 +109,24 @@
     osc.frequency.value = freq;
 
     // Piezo elements have almost no bass response and a bright resonant
-    // peak roughly in the 2.5-3.5kHz range; a highpass + peaking filter
-    // pushes the synthesized tone toward that harsh, tinny character.
+    // peak; a highpass + peaking filter pushes the synthesized tone toward
+    // that harsh, tinny character. All values come from the tuning panel.
     const highpass = ctx.createBiquadFilter();
     highpass.type = "highpass";
-    highpass.frequency.value = 220;
+    highpass.frequency.value = parseFloat(highpassRange.value);
 
     const peak_filter = ctx.createBiquadFilter();
     peak_filter.type = "peaking";
-    peak_filter.frequency.value = 3000;
-    peak_filter.Q.value = 1.1;
-    peak_filter.gain.value = 9;
+    peak_filter.frequency.value = parseFloat(peakFreqRange.value);
+    peak_filter.Q.value = parseFloat(peakQRange.value);
+    peak_filter.gain.value = parseFloat(peakGainRange.value);
 
     const gain = ctx.createGain();
     const peak = parseFloat(volumeRange.value);
+    const attackSec = parseFloat(attackRange.value) / 1000;
     gain.gain.setValueAtTime(0, now);
     // Near-instant attack: a real buzzer just gets switched on.
-    gain.gain.linearRampToValueAtTime(peak, now + 0.004);
+    gain.gain.linearRampToValueAtTime(peak, now + attackSec);
 
     osc.connect(highpass).connect(peak_filter).connect(gain).connect(ctx.destination);
     osc.start(now);
@@ -128,11 +142,12 @@
     if (!voice) return;
     const ctx = getCtx();
     const now = ctx.currentTime;
+    const releaseSec = parseFloat(releaseRange.value) / 1000;
     voice.gain.gain.cancelScheduledValues(now);
     voice.gain.gain.setValueAtTime(voice.gain.gain.value, now);
     // Short release so the cutoff isn't an audible click, but still snappy.
-    voice.gain.gain.linearRampToValueAtTime(0, now + 0.03);
-    voice.osc.stop(now + 0.04);
+    voice.gain.gain.linearRampToValueAtTime(0, now + releaseSec);
+    voice.osc.stop(now + releaseSec + 0.01);
     activeVoices.delete(voiceId);
     if (activeVoices.size === 0) iconNote.classList.remove("active");
   }
@@ -363,5 +378,45 @@
     heldKeys.delete(e.key);
     const btn = KEYMAP[e.key] || OP_KEYMAP[e.key];
     if (btn) handleKeyUp(btn);
+  });
+
+  // ---------- Tone tuning panel ----------
+  const TUNE_SLIDERS = [
+    [dutyRange, "dutyOut", 2],
+    [highpassRange, "highpassOut", 0],
+    [peakFreqRange, "peakFreqOut", 0],
+    [peakQRange, "peakQOut", 1],
+    [peakGainRange, "peakGainOut", 1],
+    [attackRange, "attackOut", 0],
+    [releaseRange, "releaseOut", 0],
+  ];
+  TUNE_SLIDERS.forEach(([slider, outId, decimals]) => {
+    const out = document.getElementById(outId);
+    const update = () => { out.textContent = parseFloat(slider.value).toFixed(decimals); };
+    slider.addEventListener("input", update);
+    update();
+  });
+
+  function currentSettingsText() {
+    return (
+      `wave=${waveSelect.value} duty=${dutyRange.value} ` +
+      `highpass=${highpassRange.value}Hz peakFreq=${peakFreqRange.value}Hz ` +
+      `peakQ=${peakQRange.value} peakGain=${peakGainRange.value}dB ` +
+      `attack=${attackRange.value}ms release=${releaseRange.value}ms`
+    );
+  }
+
+  copySettingsBtn.addEventListener("click", async () => {
+    const text = currentSettingsText();
+    settingsText.value = text;
+    try {
+      await navigator.clipboard.writeText(text);
+      copyFeedback.textContent = "コピーしました!";
+    } catch {
+      settingsText.select();
+      copyFeedback.textContent = "自動コピーできなかったので、下の欄から手動でコピーしてください。";
+    }
+    clearTimeout(copySettingsBtn._t);
+    copySettingsBtn._t = setTimeout(() => { copyFeedback.textContent = ""; }, 4000);
   });
 })();
