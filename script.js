@@ -15,6 +15,7 @@
   const peakGainRange = document.getElementById("peakGainRange");
   const attackRange = document.getElementById("attackRange");
   const releaseRange = document.getElementById("releaseRange");
+  const clickRange = document.getElementById("clickRange");
   const copySettingsBtn = document.getElementById("copySettings");
   const copyFeedback = document.getElementById("copyFeedback");
   const settingsText = document.getElementById("settingsText");
@@ -92,6 +93,37 @@
     else osc.type = val;
   }
 
+  // A real piezo disc gets driven by an abrupt voltage step, which excites
+  // its own mechanical resonance for an instant before settling into the
+  // steady tone - that's the little "tick" audible at the start of a real
+  // recording that a plain synthesized tone lacks. Approximate it with a
+  // short burst of filtered noise layered under the note's attack.
+  function playClickTransient(ctx, now) {
+    const amount = parseFloat(clickRange.value);
+    if (amount <= 0) return;
+
+    const bufferLen = Math.ceil(ctx.sampleRate * 0.02);
+    const buffer = ctx.createBuffer(1, bufferLen, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferLen; i++) data[i] = Math.random() * 2 - 1;
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const bandpass = ctx.createBiquadFilter();
+    bandpass.type = "bandpass";
+    bandpass.frequency.value = parseFloat(peakFreqRange.value);
+    bandpass.Q.value = 2.5;
+
+    const clickGain = ctx.createGain();
+    clickGain.gain.setValueAtTime(amount * parseFloat(volumeRange.value), now);
+    clickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.006);
+
+    noise.connect(bandpass).connect(clickGain).connect(ctx.destination);
+    noise.start(now);
+    noise.stop(now + 0.02);
+  }
+
   // Active notes, keyed by the button element currently sounding it, so a
   // key can be held (sustained) and multiple keys can sound at once.
   const activeVoices = new Map();
@@ -130,6 +162,7 @@
 
     osc.connect(highpass).connect(peak_filter).connect(gain).connect(ctx.destination);
     osc.start(now);
+    playClickTransient(ctx, now);
 
     activeVoices.set(voiceId, { osc, gain });
 
@@ -389,6 +422,7 @@
     [peakGainRange, "peakGainOut", 1],
     [attackRange, "attackOut", 0],
     [releaseRange, "releaseOut", 0],
+    [clickRange, "clickOut", 2],
   ];
   TUNE_SLIDERS.forEach(([slider, outId, decimals]) => {
     const out = document.getElementById(outId);
@@ -402,7 +436,8 @@
       `wave=${waveSelect.value} duty=${dutyRange.value} ` +
       `highpass=${highpassRange.value}Hz peakFreq=${peakFreqRange.value}Hz ` +
       `peakQ=${peakQRange.value} peakGain=${peakGainRange.value}dB ` +
-      `attack=${attackRange.value}ms release=${releaseRange.value}ms`
+      `attack=${attackRange.value}ms release=${releaseRange.value}ms ` +
+      `click=${clickRange.value}`
     );
   }
 
