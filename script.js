@@ -20,18 +20,26 @@
 
   const SOLFEGE = { C: "ド", D: "レ", E: "ミ", F: "ファ", G: "ソ", A: "ラ", B: "シ" };
 
+  // The real unit is tuned to Db major, not C major: the note under "1" is
+  // Db4, not C4. Every entry below (including the octave-shift range) is
+  // shifted up a half step accordingly, so flats are first-class notes here.
   const NOTE_FREQ = {
-    C4: 261.63, D4: 293.66, E4: 329.63, F4: 349.23, G4: 392.0, A4: 440.0, B4: 493.88,
-    C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99, A5: 880.0, B5: 987.77,
-    // extra range so the octave-shift control can reach roughly C4-B6, as the real unit does
-    C3: 130.81, D3: 146.83, E3: 164.81, F3: 174.61, G3: 196.0, A3: 220.0, B3: 246.94,
-    C6: 1046.5, D6: 1174.66, E6: 1318.51, F6: 1396.91, G6: 1567.98, A6: 1760.0, B6: 1975.53,
+    C3: 130.81, Db3: 138.59, D3: 146.83, Eb3: 155.56, E3: 164.81, F3: 174.61,
+    Gb3: 185.0, G3: 196.0, Ab3: 207.65, A3: 220.0, Bb3: 233.08, B3: 246.94,
+    C4: 261.63, Db4: 277.18, D4: 293.66, Eb4: 311.13, E4: 329.63, F4: 349.23,
+    Gb4: 369.99, G4: 392.0, Ab4: 415.3, A4: 440.0, Bb4: 466.16, B4: 493.88,
+    C5: 523.25, Db5: 554.37, D5: 587.33, Eb5: 622.25, E5: 659.25, F5: 698.46,
+    Gb5: 739.99, G5: 783.99, Ab5: 830.61, A5: 880.0, Bb5: 932.33, B5: 987.77,
+    C6: 1046.5, Db6: 1108.73, D6: 1174.66, Eb6: 1244.51, E6: 1318.51, F6: 1396.91,
+    Gb6: 1479.98, G6: 1567.98, Ab6: 1661.22, A6: 1760.0, Bb6: 1864.66, B6: 1975.53,
   };
 
+  const NOTE_RE = /^([A-G])(b?)(\d)$/;
+
   function noteLabel(note) {
-    const letter = note[0];
-    const octave = parseInt(note.slice(1), 10);
-    const sol = SOLFEGE[letter];
+    const [, letter, flat, octaveStr] = note.match(NOTE_RE);
+    const octave = parseInt(octaveStr, 10);
+    const sol = SOLFEGE[letter] + (flat ? "♭" : "");
     if (octave <= 3) return sol + "˛";
     if (octave === 5) return sol + "'";
     if (octave >= 6) return sol + "''";
@@ -100,9 +108,9 @@
 
   function shiftNote(note) {
     if (octaveShift === 0) return note;
-    const letter = note[0];
-    const octave = parseInt(note.slice(1), 10) + octaveShift;
-    const shifted = letter + octave;
+    const [, letter, flat, octaveStr] = note.match(NOTE_RE);
+    const octave = parseInt(octaveStr, 10) + octaveShift;
+    const shifted = letter + flat + octave;
     return NOTE_FREQ[shifted] ? shifted : note;
   }
 
@@ -204,10 +212,11 @@
     if (!voice) return;
     const ctx = getCtx();
     const now = ctx.currentTime;
+    const RELEASE_SEC = 0.5;
     voice.gain.gain.cancelScheduledValues(now);
     voice.gain.gain.setValueAtTime(Math.max(voice.gain.gain.value, 0.0001), now);
-    voice.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.02);
-    voice.src.stop(now + 0.05);
+    voice.gain.gain.exponentialRampToValueAtTime(0.0001, now + RELEASE_SEC);
+    voice.src.stop(now + RELEASE_SEC + 0.03);
     activeVoices.delete(voiceId);
     if (activeVoices.size === 0) iconNote.classList.remove("active");
   }
