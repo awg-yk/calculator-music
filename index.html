@@ -32,78 +32,61 @@
         </button>
         <div class="tone-controls">
           <label class="tone-field">
-            音色
-            <select id="waveSelect">
-              <option value="piezo" selected>ピエゾ風 (おすすめ)</option>
-              <option value="square">ピコピコ (square)</option>
-              <option value="triangle">やわらか (triangle)</option>
-              <option value="sine">サイン波 (sine)</option>
-            </select>
-          </label>
-          <label class="tone-field">
             音量
             <input type="range" id="volumeRange" min="0" max="1" step="0.01" value="0.5">
-          </label>
-          <label class="tone-field">
-            やわらかさ
-            <input type="range" id="softnessRange" min="1" max="2.5" step="0.05" value="1.3">
-            <output id="softnessOut" for="softnessRange">1.30</output>
           </label>
         </div>
       </div>
 
       <details class="tune-panel">
         <summary>音色を詳しく調整</summary>
+        <div class="tune-presets">
+          <button type="button" class="key key-fn tune-preset-btn" data-preset="hw">実機録音寄り</button>
+          <button type="button" class="key key-fn tune-preset-btn" data-preset="syn">合成寄り</button>
+          <button type="button" class="key key-fn tune-preset-btn" data-preset="mix">ブレンド</button>
+        </div>
         <div class="tune-grid">
           <label class="tune-field">
-            ハイパス カットオフ (Hz)
-            <input type="range" id="highpassRange" min="20" max="1200" step="10" value="60">
-            <output id="highpassOut" for="highpassRange">60</output>
+            倍音の減衰
+            <input type="range" id="tiltRange" min="0.8" max="2.2" step="0.01" value="1.15">
+            <output id="tiltOut" for="tiltRange">1.15</output>
+            <span class="tune-note">振幅 = 1/(n+1)^この値。矩形波は約1.0。</span>
           </label>
           <label class="tune-field">
-            ピーク周波数 (Hz)
-            <input type="range" id="peakFreqRange" min="500" max="8000" step="50" value="1700">
-            <output id="peakFreqOut" for="peakFreqRange">1700</output>
+            ゆらぎの深さ
+            <input type="range" id="depthRange" min="0" max="1" step="0.01" value="0.85">
+            <output id="depthOut" for="depthRange">0.85</output>
+            <span class="tune-note">倍音ごとの余弦変調の量。0で静的。</span>
           </label>
           <label class="tune-field">
-            ピークQ(鋭さ)
-            <input type="range" id="peakQRange" min="0.2" max="10" step="0.1" value="1.2">
-            <output id="peakQOut" for="peakQRange">1.2</output>
+            ゆらぎの速さ (Hz)
+            <input type="range" id="rateRange" min="0.1" max="4" step="0.05" value="1">
+            <output id="rateOut" for="rateRange">1.00</output>
+            <span class="tune-note">第n倍音は n/2 倍の速さで揺れる。</span>
           </label>
           <label class="tune-field">
-            ピークゲイン (dB)
-            <input type="range" id="peakGainRange" min="0" max="24" step="0.5" value="0">
-            <output id="peakGainOut" for="peakGainRange">0</output>
+            共振周波数 (Hz)
+            <input type="range" id="resFRange" min="700" max="2600" step="10" value="1450">
+            <output id="resFOut" for="resFRange">1450</output>
+            <span class="tune-note">実測では 1.3〜1.6kHz に山。電卓らしさの中心。</span>
           </label>
           <label class="tune-field">
-            ローパス カットオフ (Hz)
-            <input type="range" id="lowpassRange" min="1000" max="10000" step="100" value="3000">
-            <output id="lowpassOut" for="lowpassRange">3000</output>
+            共振の強さ (dB)
+            <input type="range" id="resGRange" min="0" max="14" step="0.5" value="5">
+            <output id="resGOut" for="resGRange">5.0</output>
+            <span class="tune-note">ピーキングEQの持ち上げ量。</span>
           </label>
           <label class="tune-field">
-            アタック (ms)
-            <input type="range" id="attackRange" min="1" max="50" step="1" value="7">
-            <output id="attackOut" for="attackRange">7</output>
+            ローパス (Hz)
+            <input type="range" id="lpRange" min="1200" max="12000" step="100" value="3200">
+            <output id="lpOut" for="lpRange">3200</output>
+            <span class="tune-note">実測は 3.2kHz から急落。シャリつきを決める。</span>
           </label>
           <label class="tune-field">
-            ディケイ(押している間の減衰速さ・ms)
-            <input type="range" id="decayRange" min="30" max="500" step="10" value="200">
-            <output id="decayOut" for="decayRange">200</output>
-          </label>
-          <label class="tune-field">
-            サスティン比 (%)
-            <input type="range" id="sustainRange" min="0" max="80" step="5" value="30">
-            <output id="sustainOut" for="sustainRange">30</output>
-          </label>
-          <label class="tune-field">
-            リリース (ms)
-            <input type="range" id="releaseRange" min="5" max="150" step="5" value="30">
-            <output id="releaseOut" for="releaseRange">30</output>
-          </label>
-          <label class="tune-field">
-            アタックのクリック感
-            <input type="range" id="clickRange" min="0" max="1" step="0.05" value="0">
-            <output id="clickOut" for="clickRange">0.00</output>
+            減衰 (dB)
+            <input type="range" id="decayRange" min="0" max="30" step="0.5" value="12">
+            <output id="decayOut" for="decayRange">12.0</output>
+            <span class="tune-note">350ms あたりの減衰量。実機は約 12dB。</span>
           </label>
         </div>
         <div class="tune-actions">
@@ -155,8 +138,8 @@
         <li>キーを押している間だけ音が鳴ります(実機と同じで、長押しすれば音を伸ばせます)。</li>
         <li>PCキーボードでも演奏できます:数字キー <code>1234567890</code>、記号キー <code>+ - * / =</code> に対応。</li>
         <li>スマホ・タブレットではマルチタッチ対応なので、和音っぽく複数キー同時押しも可能です。</li>
-        <li>音色は「ピエゾ風」がデフォルトで、実機のピエゾブザーに近づけた近似音です(square/triangle/sineも選べます)。</li>
-        <li><b>やわらかさ</b>スライダーが音色の一番効く調整です。左に回すほど倍音が多くブザーらしい硬い音、右に回すほど倍音が減って丸く柔らかい音になります。</li>
+        <li>音色は奇数倍音の加算合成で、倍音ごとにゆっくり揺れる余弦変調をかけています。この「ゆらぎ」が電卓らしいザラついた質感の正体です。</li>
+        <li>「音色を詳しく調整」の<b>プリセット</b>(実機録音寄り／合成寄り／ブレンド)で大まかな方向を選び、各スライダーで追い込めます。</li>
         <li>演奏モードでない時は、ふつうの電卓として四則演算・%・√・メモリー機能が使えます。</li>
       </ul>
       <p class="note">

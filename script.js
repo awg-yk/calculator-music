@@ -6,19 +6,14 @@
   const modeToggle = document.getElementById("modeToggle");
   const iconMusic = document.getElementById("icon-music");
   const iconNote = document.getElementById("icon-note");
-  const waveSelect = document.getElementById("waveSelect");
   const volumeRange = document.getElementById("volumeRange");
-  const softnessRange = document.getElementById("softnessRange");
-  const highpassRange = document.getElementById("highpassRange");
-  const peakFreqRange = document.getElementById("peakFreqRange");
-  const peakQRange = document.getElementById("peakQRange");
-  const peakGainRange = document.getElementById("peakGainRange");
-  const lowpassRange = document.getElementById("lowpassRange");
-  const attackRange = document.getElementById("attackRange");
+  const tiltRange = document.getElementById("tiltRange");
+  const depthRange = document.getElementById("depthRange");
+  const rateRange = document.getElementById("rateRange");
+  const resFRange = document.getElementById("resFRange");
+  const resGRange = document.getElementById("resGRange");
+  const lpRange = document.getElementById("lpRange");
   const decayRange = document.getElementById("decayRange");
-  const sustainRange = document.getElementById("sustainRange");
-  const releaseRange = document.getElementById("releaseRange");
-  const clickRange = document.getElementById("clickRange");
   const copySettingsBtn = document.getElementById("copySettings");
   const copyFeedback = document.getElementById("copyFeedback");
   const settingsText = document.getElementById("settingsText");
@@ -52,11 +47,53 @@
   });
 
   // ---------- Audio ----------
+  // Additive engine ported from the AR7778 tone workbench: odd harmonics
+  // with amplitude 1/(n+1)^tilt, each one slowly amplitude-modulated at
+  // n/2 * rate Hz (that wobble is what gives the tone its gritty, alive
+  // character), then run through a fixed dip -> resonance -> lowpass chain
+  // approximating the measured piezo response.
   let audioCtx = null;
+  let dipFilter = null;
+  let resFilter = null;
+  let lpFilter = null;
+  let masterGain = null;
+
   function getCtx() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+      dipFilter = audioCtx.createBiquadFilter();
+      dipFilter.type = "peaking";
+      dipFilter.frequency.value = 820;
+      dipFilter.Q.value = 1.4;
+      dipFilter.gain.value = -4;
+
+      resFilter = audioCtx.createBiquadFilter();
+      resFilter.type = "peaking";
+      resFilter.Q.value = 1.6;
+
+      lpFilter = audioCtx.createBiquadFilter();
+      lpFilter.type = "lowpass";
+      lpFilter.Q.value = 0.7;
+
+      masterGain = audioCtx.createGain();
+
+      dipFilter.connect(resFilter);
+      resFilter.connect(lpFilter);
+      lpFilter.connect(masterGain);
+      masterGain.connect(audioCtx.destination);
+      syncFilters();
+    }
     if (audioCtx.state === "suspended") audioCtx.resume();
     return audioCtx;
+  }
+
+  function syncFilters() {
+    if (!audioCtx) return;
+    resFilter.frequency.value = parseFloat(resFRange.value);
+    resFilter.gain.value = parseFloat(resGRange.value);
+    lpFilter.frequency.value = parseFloat(lpRange.value);
+    masterGain.gain.value = parseFloat(volumeRange.value);
   }
 
   let octaveShift = 0; // -1, 0, +1 semitone-octave shift, cycled by CE-like control (here: long behavior not needed, kept simple)
@@ -69,63 +106,62 @@
     return NOTE_FREQ[shifted] ? shifted : note;
   }
 
-  // Measured across 15 recorded notes: even harmonics sit at ~6.6% of the
-  // odd ones, i.e. the drive signal is a clean 50%-duty square. So the wave
-  // is built from odd harmonics only. What varies is how fast they fall off:
-  // 1/n is a textbook square (bright, buzzy), while larger exponents shed
-  // the upper harmonics for a rounder, softer tone. `softness` is that
-  // exponent, exposed as the main timbre control.
-  let piezoWave = null;
-  let piezoWaveSoftness = null;
-  function getPiezoWave(ctx) {
-    const softness = parseFloat(softnessRange.value);
-    if (piezoWave && piezoWaveSoftness === softness) return piezoWave;
-    const N = 40;
-    const real = new Float32Array(N);
-    const imag = new Float32Array(N);
-    for (let n = 1; n < N; n += 2) {
-      imag[n] = (2 / Math.PI) / Math.pow(n, softness);
-    }
-    piezoWave = ctx.createPeriodicWave(real, imag, { disableNormalization: false });
-    piezoWaveSoftness = softness;
-    return piezoWave;
+  // The workbench renders a one-shot buffer, but here a key can be held
+  // indefinitely, so the buffer has to loop cleanly. Every partial and every
+  // modulator frequency is snapped to a multiple of 1/BUFFER_SEC, which makes
+  // the whole buffer exactly periodic over its own length - so looping it is
+  // seamless. The snap moves pitches by well under a cent (inaudible).
+  const BUFFER_SEC = 2;
+  const MAX_PARTIAL_HZ = 12000;
+  const bufferCache = new Map();
+
+  function toneParams() {
+    return {
+      tilt: parseFloat(tiltRange.value),
+      depth: parseFloat(depthRange.value),
+      rate: parseFloat(rateRange.value),
+    };
   }
 
-  function applyWaveform(osc, ctx) {
-    const val = waveSelect.value;
-    if (val === "piezo") osc.setPeriodicWave(getPiezoWave(ctx));
-    else osc.type = val;
-  }
+  function buildBuffer(ctx, freq) {
+    const { tilt, depth, rate } = toneParams();
+    const key = `${freq}|${tilt}|${depth}|${rate}`;
+    const cached = bufferCache.get(key);
+    if (cached) return cached;
 
-  // A real piezo disc gets driven by an abrupt voltage step, which excites
-  // its own mechanical resonance for an instant before settling into the
-  // steady tone - that's the little "tick" audible at the start of a real
-  // recording that a plain synthesized tone lacks. Approximate it with a
-  // short burst of filtered noise layered under the note's attack.
-  function playClickTransient(ctx, now) {
-    const amount = parseFloat(clickRange.value);
-    if (amount <= 0) return;
-
-    const bufferLen = Math.ceil(ctx.sampleRate * 0.02);
-    const buffer = ctx.createBuffer(1, bufferLen, ctx.sampleRate);
+    const sr = ctx.sampleRate;
+    const N = Math.round(BUFFER_SEC * sr);
+    const buffer = ctx.createBuffer(1, N, sr);
     const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferLen; i++) data[i] = Math.random() * 2 - 1;
+    const nyquist = Math.min(sr / 2 * 0.94, MAX_PARTIAL_HZ);
+    const TWO_PI_OVER_N = (2 * Math.PI) / N;
 
-    const noise = ctx.createBufferSource();
-    noise.buffer = buffer;
+    for (let n = 1; n * freq < nyquist; n += 2) {
+      const amp = 1 / Math.pow(n + 1, tilt);
+      // cycles-per-buffer for this partial and for its modulator, rounded to
+      // integers so both close the loop exactly at the buffer boundary
+      const kPartial = Math.max(1, Math.round(n * freq * BUFFER_SEC));
+      const kMod = Math.round((n * rate / 2) * BUFFER_SEC);
+      const wp = TWO_PI_OVER_N * kPartial;
+      const wm = TWO_PI_OVER_N * kMod;
+      for (let i = 0; i < N; i++) {
+        data[i] += amp * Math.sin(wp * i) * (1 - depth + depth * Math.cos(wm * i));
+      }
+    }
 
-    const bandpass = ctx.createBiquadFilter();
-    bandpass.type = "bandpass";
-    bandpass.frequency.value = parseFloat(peakFreqRange.value);
-    bandpass.Q.value = 2.5;
+    let peak = 0;
+    for (let i = 0; i < N; i++) {
+      const a = Math.abs(data[i]);
+      if (a > peak) peak = a;
+    }
+    if (peak > 0) {
+      const g = 0.92 / peak;
+      for (let i = 0; i < N; i++) data[i] *= g;
+    }
 
-    const clickGain = ctx.createGain();
-    clickGain.gain.setValueAtTime(amount * parseFloat(volumeRange.value), now);
-    clickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.006);
-
-    noise.connect(bandpass).connect(clickGain).connect(ctx.destination);
-    noise.start(now);
-    noise.stop(now + 0.02);
+    if (bufferCache.size > 48) bufferCache.clear();
+    bufferCache.set(key, buffer);
+    return buffer;
   }
 
   // Active notes, keyed by the button element currently sounding it, so a
@@ -140,49 +176,24 @@
     if (!freq) return;
 
     const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    applyWaveform(osc, ctx);
-    osc.frequency.value = freq;
+    const src = ctx.createBufferSource();
+    src.buffer = buildBuffer(ctx, freq);
+    src.loop = true;
 
-    // The cleanly-measured notes show a smooth harmonic rolloff with no
-    // resonant peak, and a fundamental that dominates everything else - so
-    // the peak filter defaults to 0dB (off, kept only as a manual control)
-    // and the highpass sits well below the lowest fundamental instead of
-    // clipping into it. Shaping is left mostly to the waveform itself.
-    const highpass = ctx.createBiquadFilter();
-    highpass.type = "highpass";
-    highpass.frequency.value = parseFloat(highpassRange.value);
-
-    const peak_filter = ctx.createBiquadFilter();
-    peak_filter.type = "peaking";
-    peak_filter.frequency.value = parseFloat(peakFreqRange.value);
-    peak_filter.Q.value = parseFloat(peakQRange.value);
-    peak_filter.gain.value = parseFloat(peakGainRange.value);
-
-    const lowpass = ctx.createBiquadFilter();
-    lowpass.type = "lowpass";
-    lowpass.frequency.value = parseFloat(lowpassRange.value);
-    lowpass.Q.value = 0.7;
-
+    // Fast attack, then a decay toward the level implied by the "decay in dB
+    // over 350ms" control, which is where it stays for as long as the key is
+    // held (the real unit keeps sounding, just quieter).
     const gain = ctx.createGain();
-    const peak = parseFloat(volumeRange.value);
-    const attackSec = parseFloat(attackRange.value) / 1000;
-    const decaySec = parseFloat(decayRange.value) / 1000;
-    const sustainFloor = peak * (parseFloat(sustainRange.value) / 100);
-    gain.gain.setValueAtTime(0, now);
-    // Near-instant attack: a real buzzer just gets switched on.
-    gain.gain.linearRampToValueAtTime(peak, now + attackSec);
-    // A real recording keeps fading even while the key is held (closer to a
-    // struck/plucked envelope than a flat organ-like sustain) - measured
-    // from an actual sample: ~5ms attack, then decaying toward roughly 30%
-    // of peak over a couple hundred ms.
-    gain.gain.setTargetAtTime(sustainFloor, now + attackSec, decaySec);
+    const tail = Math.pow(10, -parseFloat(decayRange.value) / 20);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(1, now + 0.003);
+    gain.gain.exponentialRampToValueAtTime(Math.max(tail, 0.0015), now + 0.35);
 
-    osc.connect(highpass).connect(peak_filter).connect(lowpass).connect(gain).connect(ctx.destination);
-    osc.start(now);
-    playClickTransient(ctx, now);
+    src.connect(gain);
+    gain.connect(dipFilter);
+    src.start(now);
 
-    activeVoices.set(voiceId, { osc, gain });
+    activeVoices.set(voiceId, { src, gain });
 
     iconNote.textContent = noteLabel(actualNote) + " (" + actualNote + ")";
     iconNote.classList.add("active");
@@ -193,12 +204,10 @@
     if (!voice) return;
     const ctx = getCtx();
     const now = ctx.currentTime;
-    const releaseSec = parseFloat(releaseRange.value) / 1000;
     voice.gain.gain.cancelScheduledValues(now);
-    voice.gain.gain.setValueAtTime(voice.gain.gain.value, now);
-    // Short release so the cutoff isn't an audible click, but still snappy.
-    voice.gain.gain.linearRampToValueAtTime(0, now + releaseSec);
-    voice.osc.stop(now + releaseSec + 0.01);
+    voice.gain.gain.setValueAtTime(Math.max(voice.gain.gain.value, 0.0001), now);
+    voice.gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.02);
+    voice.src.stop(now + 0.05);
     activeVoices.delete(voiceId);
     if (activeVoices.size === 0) iconNote.classList.remove("active");
   }
@@ -215,9 +224,9 @@
     const gain = ctx.createGain();
     osc.type = "square";
     osc.frequency.value = 180;
-    gain.gain.setValueAtTime(parseFloat(volumeRange.value) * 0.5, now);
+    gain.gain.setValueAtTime(0.5, now);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
-    osc.connect(gain).connect(ctx.destination);
+    osc.connect(gain).connect(dipFilter);
     osc.start(now);
     osc.stop(now + 0.06);
   }
@@ -330,9 +339,31 @@
     iconMusic.classList.toggle("active", musicMode);
     if (musicMode) {
       display.textContent = "Play me!";
+      warmUpBuffers();
     } else {
       clearAll();
     }
+  }
+
+  // Rendering a 2s additive buffer takes tens of milliseconds, which would be
+  // an audible hitch on the first press of each key. Build them ahead of time
+  // in small chunks once music mode is on, so playing stays responsive.
+  let warmUpTimer = null;
+  function warmUpBuffers() {
+    clearTimeout(warmUpTimer);
+    // Resolve the context here, while still inside the click that toggled
+    // music mode, so it starts running rather than suspended.
+    const ctx = getCtx();
+    const notes = Array.from(document.querySelectorAll(".key[data-note]"))
+      .map((btn) => NOTE_FREQ[shiftNote(btn.dataset.note)])
+      .filter(Boolean);
+    let i = 0;
+    const step = () => {
+      if (!musicMode || i >= notes.length) return;
+      buildBuffer(ctx, notes[i++]);
+      warmUpTimer = setTimeout(step, 0);
+    };
+    warmUpTimer = setTimeout(step, 0);
   }
 
   modeToggle.addEventListener("click", () => setMusicMode(!musicMode));
@@ -432,35 +463,54 @@
   });
 
   // ---------- Tone tuning panel ----------
+  // tilt/depth/rate feed the wavetable (buildBuffer caches per value set),
+  // the rest drive the shared filter chain live.
   const TUNE_SLIDERS = [
-    [softnessRange, "softnessOut", 2],
-    [highpassRange, "highpassOut", 0],
-    [peakFreqRange, "peakFreqOut", 0],
-    [peakQRange, "peakQOut", 1],
-    [peakGainRange, "peakGainOut", 1],
-    [lowpassRange, "lowpassOut", 0],
-    [attackRange, "attackOut", 0],
-    [decayRange, "decayOut", 0],
-    [sustainRange, "sustainOut", 0],
-    [releaseRange, "releaseOut", 0],
-    [clickRange, "clickOut", 2],
+    [tiltRange, "tiltOut", 2],
+    [depthRange, "depthOut", 2],
+    [rateRange, "rateOut", 2],
+    [resFRange, "resFOut", 0],
+    [resGRange, "resGOut", 1],
+    [lpRange, "lpOut", 0],
+    [decayRange, "decayOut", 1],
   ];
   TUNE_SLIDERS.forEach(([slider, outId, decimals]) => {
     const out = document.getElementById(outId);
-    const update = () => { out.textContent = parseFloat(slider.value).toFixed(decimals); };
+    const update = () => {
+      out.textContent = parseFloat(slider.value).toFixed(decimals);
+      syncFilters();
+    };
     slider.addEventListener("input", update);
     update();
+  });
+  volumeRange.addEventListener("input", syncFilters);
+
+  const PRESETS = {
+    hw:  { tilt: 1.05,  depth: 0.22, rate: 0.8, resF: 1450, resG: 6.5, lp: 3000,  decay: 12 },
+    syn: { tilt: 1.151, depth: 1.00, rate: 1.0, resF: 1450, resG: 0,   lp: 12000, decay: 0 },
+    mix: { tilt: 1.15,  depth: 0.85, rate: 1.0, resF: 1450, resG: 5,   lp: 3200,  decay: 12 },
+  };
+  const PRESET_INPUTS = {
+    tilt: tiltRange, depth: depthRange, rate: rateRange,
+    resF: resFRange, resG: resGRange, lp: lpRange, decay: decayRange,
+  };
+  document.querySelectorAll("[data-preset]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const preset = PRESETS[btn.dataset.preset];
+      Object.keys(preset).forEach((k) => {
+        PRESET_INPUTS[k].value = preset[k];
+        PRESET_INPUTS[k].dispatchEvent(new Event("input"));
+      });
+      document.querySelectorAll("[data-preset]").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+    });
   });
 
   function currentSettingsText() {
     return (
-      `wave=${waveSelect.value} softness=${softnessRange.value} ` +
-      `highpass=${highpassRange.value}Hz peakFreq=${peakFreqRange.value}Hz ` +
-      `peakQ=${peakQRange.value} peakGain=${peakGainRange.value}dB ` +
-      `lowpass=${lowpassRange.value}Hz ` +
-      `attack=${attackRange.value}ms decay=${decayRange.value}ms ` +
-      `sustain=${sustainRange.value}% release=${releaseRange.value}ms ` +
-      `click=${clickRange.value}`
+      `tilt=${tiltRange.value} depth=${depthRange.value} rate=${rateRange.value}Hz ` +
+      `resF=${resFRange.value}Hz resG=${resGRange.value}dB ` +
+      `lp=${lpRange.value}Hz decay=${decayRange.value}dB`
     );
   }
 

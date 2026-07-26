@@ -178,10 +178,30 @@ h1 {
   font-weight: 700;
   color: #3a3f47;
 }
+.tune-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.tune-preset-btn {
+  padding: 8px 12px;
+  font-size: 0.7rem;
+}
+.tune-preset-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+.tune-note {
+  font-size: 0.58rem;
+  color: #6b6f76;
+  line-height: 1.45;
+}
+
 .tune-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 8px 14px;
+  gap: 10px 14px;
   margin-top: 10px;
 }
 .tune-field {
