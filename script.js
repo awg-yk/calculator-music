@@ -29,21 +29,25 @@
     return sol;
   }
 
-  // Add small solfège labels onto the note keys.
+  // Add small solfège labels onto the note keys. The text itself depends on
+  // the semitone transpose, so it's (re)computed by refreshNoteLabels() once
+  // shiftNote() is available below - here we just create the empty spans.
+  const noteLabelEntries = [];
   document.querySelectorAll(".key[data-note]").forEach((btn) => {
     const label = document.createElement("span");
     label.className = "note-label";
-    label.textContent = noteLabel(btn.dataset.note);
     btn.appendChild(label);
+    noteLabelEntries.push({ btn, label });
   });
 
-  // Add small keyboard-letter hints onto the second calculator's keys (its
-  // main label matches the first calculator's digits/symbols, so it needs a
-  // separate hint for which physical key actually plays it).
-  document.querySelectorAll("#calc2 .key[data-letter]").forEach((btn) => {
+  // Add small keyboard-letter hints onto any key with a non-obvious keyboard
+  // binding (all of the second calculator's keys, plus the first
+  // calculator's M-/M+/▼/▲/= utility keys).
+  document.querySelectorAll(".key[data-letter]").forEach((btn) => {
     const hint = document.createElement("span");
     hint.className = "key-hint";
-    hint.textContent = btn.dataset.letter.toUpperCase();
+    const v = btn.dataset.letter;
+    hint.textContent = v.length === 1 ? v.toUpperCase() : v;
     btn.appendChild(hint);
   });
 
@@ -140,6 +144,7 @@
 
   function setSemitoneShift(value) {
     semitoneShift = Math.max(-MAX_SEMITONE_SHIFT, Math.min(MAX_SEMITONE_SHIFT, value));
+    refreshNoteLabels();
   }
 
   function shiftNote(note) {
@@ -151,6 +156,15 @@
     const shifted = CHROMATIC[idx] + octave;
     return NOTE_FREQ[shifted] ? shifted : note;
   }
+
+  // The on-key solfège label always reflects the currently sounding
+  // (transposed) note, not just the button's base note.
+  function refreshNoteLabels() {
+    noteLabelEntries.forEach(({ btn, label }) => {
+      label.textContent = noteLabel(shiftNote(btn.dataset.note));
+    });
+  }
+  refreshNoteLabels();
 
   // The workbench renders a one-shot buffer, but here a key can be held
   // indefinitely, so the buffer has to loop cleanly. Every partial and every
@@ -231,7 +245,13 @@
     gain.connect(dipFilter);
     src.start(now);
 
-    activeVoices.set(voiceId, { src, gain });
+    // Safety backstop: if a pointerup/keyup is ever missed (seen occasionally
+    // on the second calculator, likely a lost pointer-capture event), force
+    // the note off after a generous hold time rather than let it loop forever.
+    const MAX_HOLD_MS = 20000;
+    const safetyTimer = setTimeout(() => stopVoice(voiceId), MAX_HOLD_MS);
+
+    activeVoices.set(voiceId, { src, gain, safetyTimer });
 
     const iconNote = voiceId.closest(".calc").querySelector(".note-name");
     iconNote.textContent = noteLabel(actualNote) + " (" + actualNote + ")";
@@ -241,6 +261,7 @@
   function stopVoice(voiceId) {
     const voice = activeVoices.get(voiceId);
     if (!voice) return;
+    clearTimeout(voice.safetyTimer);
     const ctx = getCtx();
     const now = ctx.currentTime;
     const RELEASE_SEC = 0.5;
@@ -303,7 +324,11 @@
   function handleKeyDown(btn) {
     pressVisual(btn);
 
-    if (btn.dataset.digit !== undefined) appendDigit(btn, btn.dataset.digit);
+    // "0" has no assigned pitch and is deliberately left out of the digit
+    // echo too - it should only produce the click sound below.
+    if (btn.dataset.digit !== undefined && btn.dataset.digit !== "0") {
+      appendDigit(btn, btn.dataset.digit);
+    }
 
     if (btn.dataset.note) {
       startVoice(btn, btn.dataset.note);
@@ -334,6 +359,9 @@
     });
     btn.addEventListener("pointerup", () => handleKeyUp(btn));
     btn.addEventListener("pointercancel", () => handleKeyUp(btn));
+    // Belt-and-braces: fires whenever capture ends for any reason, in case a
+    // pointerup/pointercancel is ever swallowed (see MAX_HOLD_MS above too).
+    btn.addEventListener("lostpointercapture", () => handleKeyUp(btn));
   });
 
   // If the tab loses focus while a key is physically held, the pointerup
@@ -359,10 +387,12 @@
   });
 
   // ---------- PC keyboard support ----------
-  // Number-row/numpad and +-*/=  are scoped to the first calculator only -
+  // Number-row/numpad and +-*/= are scoped to the first calculator only -
   // the second calculator reuses the same digit/symbol labels (per the
-  // "same appearance" requirement), so it is played exclusively via
-  // LETTER_KEYMAP below to avoid the two calculators fighting over a key.
+  // "same appearance" requirement), so its note/operator keys are played
+  // exclusively via CALC2_KEYMAP to avoid the two calculators fighting over
+  // a key. CALC1_KEYMAP covers the first calculator's M-/M+/▼/▲/= keys,
+  // whose bindings (I/O/K/L/Enter) don't match their printed symbol.
   const KEYMAP = {};
   document.querySelectorAll("#calc .key[data-digit]").forEach((btn) => {
     if (btn.dataset.digit.length === 1) KEYMAP[btn.dataset.digit] = btn;
@@ -375,16 +405,30 @@
     "=": document.querySelector('#calc [data-eq="="]'),
     Enter: document.querySelector('#calc [data-eq="="]'),
   };
-  const LETTER_KEYMAP = {};
+
+  // Normalizes a KeyboardEvent.key to the same form used in data-letter:
+  // lowercase for single characters, "Space" for the space bar, and
+  // multi-character key names (like "Enter") passed through unchanged.
+  function normalizeKey(rawKey) {
+    if (rawKey === " ") return "Space";
+    return rawKey.length === 1 ? rawKey.toLowerCase() : rawKey;
+  }
+
+  const CALC1_KEYMAP = {};
+  document.querySelectorAll("#calc .key[data-letter]").forEach((btn) => {
+    CALC1_KEYMAP[btn.dataset.letter] = btn;
+  });
+  const CALC2_KEYMAP = {};
   document.querySelectorAll("#calc2 .key[data-letter]").forEach((btn) => {
-    LETTER_KEYMAP[btn.dataset.letter] = btn;
+    CALC2_KEYMAP[btn.dataset.letter] = btn;
   });
 
   const heldKeys = new Set();
   window.addEventListener("keydown", (e) => {
     if (heldKeys.has(e.key)) return; // ignore OS key-repeat
-    const btn = KEYMAP[e.key] || OP_KEYMAP[e.key] ||
-      (calc2Enabled ? LETTER_KEYMAP[e.key.toLowerCase()] : undefined);
+    const token = normalizeKey(e.key);
+    const btn = KEYMAP[e.key] || OP_KEYMAP[e.key] || CALC1_KEYMAP[token] ||
+      (calc2Enabled ? CALC2_KEYMAP[token] : undefined);
     if (!btn) return;
     heldKeys.add(e.key);
     e.preventDefault();
@@ -393,7 +437,8 @@
   });
   window.addEventListener("keyup", (e) => {
     heldKeys.delete(e.key);
-    const btn = KEYMAP[e.key] || OP_KEYMAP[e.key] || LETTER_KEYMAP[e.key.toLowerCase()];
+    const token = normalizeKey(e.key);
+    const btn = KEYMAP[e.key] || OP_KEYMAP[e.key] || CALC1_KEYMAP[token] || CALC2_KEYMAP[token];
     if (btn) handleKeyUp(btn);
   });
 })();
