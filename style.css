@@ -112,8 +112,8 @@ h1 {
 .display {
   background: var(--screen-bg);
   color: var(--screen-fg);
-  font-family: "DSEG7", "Courier New", monospace;
-  font-size: 2rem;
+  font-family: "Courier New", monospace;
+  font-size: 1.4rem;
   text-align: right;
   padding: 4px 2px;
   border-radius: 4px;
@@ -123,139 +123,9 @@ h1 {
   min-height: 1.3em;
 }
 
-.mode-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
-}
-
-.key-mode {
-  background: linear-gradient(180deg, var(--accent), #5a2fc2);
-  color: #fff;
-  border-radius: 12px;
-  padding: 8px 14px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  line-height: 1.1;
-  min-width: 78px;
-}
-.key-mode .key-main { font-weight: 800; font-size: 1rem; }
-.key-mode .key-sub { font-size: 0.55rem; opacity: 0.9; }
-.key-mode.active {
-  background: linear-gradient(180deg, #ff5f8a, #d61f5c);
-}
-
-.tone-controls {
-  display: flex;
-  gap: 10px;
-  flex: 1;
-  flex-wrap: wrap;
-}
-.tone-field {
-  font-size: 0.62rem;
-  color: #40454c;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.tone-field select,
-.tone-field input {
-  font-size: 0.75rem;
-}
-
-.tune-panel {
-  background: rgba(255, 255, 255, 0.5);
-  border-radius: 10px;
-  padding: 8px 10px;
-  margin-bottom: 12px;
-  font-size: 0.75rem;
-}
-.tune-panel summary {
-  cursor: pointer;
-  font-weight: 700;
-  color: #3a3f47;
-}
-.tune-presets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
-}
-.tune-preset-btn {
-  padding: 8px 12px;
-  font-size: 0.7rem;
-}
-.tune-preset-btn.active {
-  background: var(--accent);
-  color: #fff;
-}
-.tune-note {
-  font-size: 0.58rem;
-  color: #6b6f76;
-  line-height: 1.45;
-}
-
-.tune-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px 14px;
-  margin-top: 10px;
-}
-.tune-field {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 0.65rem;
-  color: #40454c;
-}
-.tune-field input[type="range"] {
-  width: 100%;
-}
-.tune-field output {
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: var(--accent);
-}
-.tune-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 10px;
-  flex-wrap: wrap;
-}
-.tune-copy-btn {
-  padding: 8px 12px;
-  font-size: 0.7rem;
-}
-.tune-copy-feedback {
-  font-size: 0.7rem;
-  color: #2c8a4d;
-  font-weight: 700;
-}
-.tune-settings-text {
-  width: 100%;
-  margin-top: 8px;
-  font-family: monospace;
-  font-size: 0.65rem;
-  resize: vertical;
-  border-radius: 6px;
-  border: 1px solid rgba(0,0,0,0.15);
-  padding: 4px 6px;
-}
-
-.func-keys {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
 .keys {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 8px;
 }
 
@@ -298,11 +168,14 @@ h1 {
 .key-eq {
   background: var(--key-eq);
   color: var(--key-eq-text);
-  grid-column: 4 / 5;
 }
 
 .key-zero {
   grid-column: 1 / 2;
+}
+
+.key-plus {
+  grid-row: span 2;
 }
 
 .music-mode .key-num,
@@ -351,6 +224,6 @@ h1 {
 }
 
 @media (max-width: 380px) {
-  .display { font-size: 1.6rem; }
+  .display { font-size: 1.1rem; }
   .key { font-size: 1rem; padding: 14px 0; }
 }

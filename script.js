@@ -2,21 +2,7 @@
   "use strict";
 
   const display = document.getElementById("display");
-  const calc = document.getElementById("calc");
-  const modeToggle = document.getElementById("modeToggle");
-  const iconMusic = document.getElementById("icon-music");
   const iconNote = document.getElementById("icon-note");
-  const volumeRange = document.getElementById("volumeRange");
-  const tiltRange = document.getElementById("tiltRange");
-  const depthRange = document.getElementById("depthRange");
-  const rateRange = document.getElementById("rateRange");
-  const resFRange = document.getElementById("resFRange");
-  const resGRange = document.getElementById("resGRange");
-  const lpRange = document.getElementById("lpRange");
-  const decayRange = document.getElementById("decayRange");
-  const copySettingsBtn = document.getElementById("copySettings");
-  const copyFeedback = document.getElementById("copyFeedback");
-  const settingsText = document.getElementById("settingsText");
 
   const SOLFEGE = { C: "ド", D: "レ", E: "ミ", F: "ファ", G: "ソ", A: "ラ", B: "シ" };
 
@@ -46,7 +32,7 @@
     return sol;
   }
 
-  // Add small solfège labels onto the note keys (visible only in music mode).
+  // Add small solfège labels onto the note keys.
   document.querySelectorAll(".key[data-note]").forEach((btn) => {
     const label = document.createElement("span");
     label.className = "note-label";
@@ -54,12 +40,33 @@
     btn.appendChild(label);
   });
 
+  // ---------- Volume (5 discrete steps, shown on the LCD) ----------
+  const VOLUME_LEVELS = [0.2, 0.4, 0.6, 0.8, 1.0];
+  let volumeIndex = 2;
+
+  function renderVolume() {
+    const level = volumeIndex + 1;
+    display.textContent = "音量 " + "■".repeat(level) + "□".repeat(VOLUME_LEVELS.length - level);
+  }
+
+  function setVolume(index) {
+    volumeIndex = Math.max(0, Math.min(VOLUME_LEVELS.length - 1, index));
+    syncFilters();
+    renderVolume();
+  }
+
+  renderVolume();
+
   // ---------- Audio ----------
   // Additive engine ported from the AR7778 tone workbench: odd harmonics
   // with amplitude 1/(n+1)^tilt, each one slowly amplitude-modulated at
   // n/2 * rate Hz (that wobble is what gives the tone its gritty, alive
   // character), then run through a fixed dip -> resonance -> lowpass chain
-  // approximating the measured piezo response.
+  // approximating the measured piezo response. Tone is fixed to the "blend"
+  // preset - the tuning panel used to expose these as sliders.
+  const TONE = { tilt: 1.15, depth: 0.85, rate: 1.0 };
+  const FILTER_SETTINGS = { resF: 1450, resG: 5, lp: 3200, decayDb: 12 };
+
   let audioCtx = null;
   let dipFilter = null;
   let resFilter = null;
@@ -91,6 +98,7 @@
       lpFilter.connect(masterGain);
       masterGain.connect(audioCtx.destination);
       syncFilters();
+      warmUpBuffers();
     }
     if (audioCtx.state === "suspended") audioCtx.resume();
     return audioCtx;
@@ -98,13 +106,13 @@
 
   function syncFilters() {
     if (!audioCtx) return;
-    resFilter.frequency.value = parseFloat(resFRange.value);
-    resFilter.gain.value = parseFloat(resGRange.value);
-    lpFilter.frequency.value = parseFloat(lpRange.value);
-    masterGain.gain.value = parseFloat(volumeRange.value);
+    resFilter.frequency.value = FILTER_SETTINGS.resF;
+    resFilter.gain.value = FILTER_SETTINGS.resG;
+    lpFilter.frequency.value = FILTER_SETTINGS.lp;
+    masterGain.gain.value = VOLUME_LEVELS[volumeIndex];
   }
 
-  let octaveShift = 0; // -1, 0, +1 semitone-octave shift, cycled by CE-like control (here: long behavior not needed, kept simple)
+  let octaveShift = 0; // -1, 0, +1 semitone-octave shift, not currently exposed in the UI
 
   function shiftNote(note) {
     if (octaveShift === 0) return note;
@@ -123,16 +131,8 @@
   const MAX_PARTIAL_HZ = 12000;
   const bufferCache = new Map();
 
-  function toneParams() {
-    return {
-      tilt: parseFloat(tiltRange.value),
-      depth: parseFloat(depthRange.value),
-      rate: parseFloat(rateRange.value),
-    };
-  }
-
   function buildBuffer(ctx, freq) {
-    const { tilt, depth, rate } = toneParams();
+    const { tilt, depth, rate } = TONE;
     const key = `${freq}|${tilt}|${depth}|${rate}`;
     const cached = bufferCache.get(key);
     if (cached) return cached;
@@ -189,10 +189,10 @@
     src.loop = true;
 
     // Fast attack, then a decay toward the level implied by the "decay in dB
-    // over 350ms" control, which is where it stays for as long as the key is
+    // over 350ms" setting, which is where it stays for as long as the key is
     // held (the real unit keeps sounding, just quieter).
     const gain = ctx.createGain();
-    const tail = Math.pow(10, -parseFloat(decayRange.value) / 20);
+    const tail = Math.pow(10, -FILTER_SETTINGS.decayDb / 20);
     gain.gain.setValueAtTime(0.0001, now);
     gain.gain.linearRampToValueAtTime(1, now + 0.003);
     gain.gain.exponentialRampToValueAtTime(Math.max(tail, 0.0015), now + 0.35);
@@ -240,142 +240,22 @@
     osc.stop(now + 0.06);
   }
 
-  // ---------- Calculator logic ----------
-  let acc = null;
-  let pendingOp = null;
-  let current = "0";
-  // true when the next digit press should start a brand-new number
-  // instead of appending to `current` (right after an operator or "=").
-  let freshEntry = true;
-  let memory = 0;
-
-  function render() {
-    display.textContent = current;
-  }
-
-  function inputDigit(d) {
-    if (freshEntry) {
-      current = "0";
-      freshEntry = false;
-    }
-    if (d === ".") {
-      if (!current.includes(".")) current += ".";
-    } else if (d === "00") {
-      current = current === "0" ? "0" : current + "00";
-    } else {
-      current = current === "0" ? d : current + d;
-    }
-    render();
-  }
-
-  function applyOp(a, b, op) {
-    switch (op) {
-      case "÷": return b === 0 ? 0 : a / b;
-      case "×": return a * b;
-      case "−": return a - b;
-      case "+": return a + b;
-      default: return b;
-    }
-  }
-
-  function inputOp(op) {
-    const val = parseFloat(current);
-    if (acc === null) {
-      acc = val;
-    } else if (!freshEntry) {
-      acc = applyOp(acc, val, pendingOp);
-    }
-    pendingOp = op;
-    current = String(acc);
-    freshEntry = true;
-    render();
-  }
-
-  function evaluate() {
-    if (pendingOp === null) return;
-    const val = parseFloat(current);
-    acc = applyOp(acc, val, pendingOp);
-    current = String(acc);
-    pendingOp = null;
-    freshEntry = true;
-    render();
-  }
-
-  function clearAll() {
-    acc = null;
-    pendingOp = null;
-    current = "0";
-    freshEntry = true;
-    render();
-  }
-
-  function percent() {
-    current = String(parseFloat(current) / 100);
-    freshEntry = true;
-    render();
-  }
-
-  function sqrt() {
-    const v = parseFloat(current);
-    current = v < 0 ? "0" : String(Math.sqrt(v));
-    freshEntry = true;
-    render();
-  }
-
-  function memPlus() {
-    memory += parseFloat(current);
-    freshEntry = true;
-  }
-  function memMinus() {
-    memory -= parseFloat(current);
-    freshEntry = true;
-  }
-  function memRecall() {
-    current = String(memory);
-    freshEntry = true;
-    render();
-  }
-
-  render();
-
-  // ---------- Mode switching ----------
-  let musicMode = false;
-
-  function setMusicMode(on) {
-    musicMode = on;
-    calc.classList.toggle("music-mode", musicMode);
-    modeToggle.classList.toggle("active", musicMode);
-    iconMusic.classList.toggle("active", musicMode);
-    if (musicMode) {
-      display.textContent = "Play me!";
-      warmUpBuffers();
-    } else {
-      clearAll();
-    }
-  }
-
   // Rendering a 2s additive buffer takes tens of milliseconds, which would be
   // an audible hitch on the first press of each key. Build them ahead of time
-  // in small chunks once music mode is on, so playing stays responsive.
-  let warmUpTimer = null;
+  // in small chunks once the audio context is running, so playing stays responsive.
   function warmUpBuffers() {
-    clearTimeout(warmUpTimer);
-    // Resolve the context here, while still inside the click that toggled
-    // music mode, so it starts running rather than suspended.
-    const ctx = getCtx();
+    const ctx = audioCtx;
     const notes = Array.from(document.querySelectorAll(".key[data-note]"))
       .map((btn) => NOTE_FREQ[shiftNote(btn.dataset.note)])
       .filter(Boolean);
     let i = 0;
     const step = () => {
-      if (!musicMode || i >= notes.length) return;
+      if (i >= notes.length) return;
       buildBuffer(ctx, notes[i++]);
-      warmUpTimer = setTimeout(step, 0);
+      setTimeout(step, 0);
     };
-    warmUpTimer = setTimeout(step, 0);
+    setTimeout(step, 0);
   }
-
-  modeToggle.addEventListener("click", () => setMusicMode(!musicMode));
 
   // ---------- Key press handling (mouse / touch / pen) ----------
   function pressVisual(btn) {
@@ -383,42 +263,24 @@
     setTimeout(() => btn.classList.remove("pressed"), 120);
   }
 
-  // Key-down: in music mode this starts a sustained note (or a one-shot
-  // click / calculator function); in calculator mode it's the usual
-  // one-shot digit/operator entry.
+  // Key-down: starts a sustained note, a one-shot click, or a volume step.
   function handleKeyDown(btn) {
     pressVisual(btn);
 
-    if (musicMode) {
-      if (btn.dataset.note) {
-        startVoice(btn, btn.dataset.note);
-      } else if (btn.dataset.digit === "0") {
-        playClick();
-      }
-      // function row (AC, %, √, MRC, M-, M+) stays inert in music mode
-      // except AC, which always works so you can get back to "0".
-      if (btn.dataset.fn === "ac") clearAll();
-      return;
-    }
-
-    if (btn.dataset.digit !== undefined) inputDigit(btn.dataset.digit);
-    else if (btn.dataset.op) inputOp(btn.dataset.op);
-    else if (btn.dataset.eq) evaluate();
-    else if (btn.dataset.fn) {
-      switch (btn.dataset.fn) {
-        case "ac": clearAll(); break;
-        case "percent": percent(); break;
-        case "sqrt": sqrt(); break;
-        case "mplus": memPlus(); break;
-        case "mminus": memMinus(); break;
-        case "mrc": memRecall(); break;
-      }
+    if (btn.dataset.note) {
+      startVoice(btn, btn.dataset.note);
+    } else if (btn.dataset.digit === "0") {
+      playClick();
+    } else if (btn.dataset.vol === "down") {
+      setVolume(volumeIndex - 1);
+    } else if (btn.dataset.vol === "up") {
+      setVolume(volumeIndex + 1);
     }
   }
 
-  // Key-up: only matters in music mode, to stop a sustained note.
+  // Key-up: only matters for sustained notes, to stop them.
   function handleKeyUp(btn) {
-    if (musicMode && btn.dataset.note) stopVoice(btn);
+    if (btn.dataset.note) stopVoice(btn);
   }
 
   document.querySelectorAll(".key").forEach((btn) => {
@@ -469,71 +331,5 @@
     heldKeys.delete(e.key);
     const btn = KEYMAP[e.key] || OP_KEYMAP[e.key];
     if (btn) handleKeyUp(btn);
-  });
-
-  // ---------- Tone tuning panel ----------
-  // tilt/depth/rate feed the wavetable (buildBuffer caches per value set),
-  // the rest drive the shared filter chain live.
-  const TUNE_SLIDERS = [
-    [tiltRange, "tiltOut", 2],
-    [depthRange, "depthOut", 2],
-    [rateRange, "rateOut", 2],
-    [resFRange, "resFOut", 0],
-    [resGRange, "resGOut", 1],
-    [lpRange, "lpOut", 0],
-    [decayRange, "decayOut", 1],
-  ];
-  TUNE_SLIDERS.forEach(([slider, outId, decimals]) => {
-    const out = document.getElementById(outId);
-    const update = () => {
-      out.textContent = parseFloat(slider.value).toFixed(decimals);
-      syncFilters();
-    };
-    slider.addEventListener("input", update);
-    update();
-  });
-  volumeRange.addEventListener("input", syncFilters);
-
-  const PRESETS = {
-    hw:  { tilt: 1.05,  depth: 0.22, rate: 0.8, resF: 1450, resG: 6.5, lp: 3000,  decay: 12 },
-    syn: { tilt: 1.151, depth: 1.00, rate: 1.0, resF: 1450, resG: 0,   lp: 12000, decay: 0 },
-    mix: { tilt: 1.15,  depth: 0.85, rate: 1.0, resF: 1450, resG: 5,   lp: 3200,  decay: 12 },
-  };
-  const PRESET_INPUTS = {
-    tilt: tiltRange, depth: depthRange, rate: rateRange,
-    resF: resFRange, resG: resGRange, lp: lpRange, decay: decayRange,
-  };
-  document.querySelectorAll("[data-preset]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const preset = PRESETS[btn.dataset.preset];
-      Object.keys(preset).forEach((k) => {
-        PRESET_INPUTS[k].value = preset[k];
-        PRESET_INPUTS[k].dispatchEvent(new Event("input"));
-      });
-      document.querySelectorAll("[data-preset]").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-    });
-  });
-
-  function currentSettingsText() {
-    return (
-      `tilt=${tiltRange.value} depth=${depthRange.value} rate=${rateRange.value}Hz ` +
-      `resF=${resFRange.value}Hz resG=${resGRange.value}dB ` +
-      `lp=${lpRange.value}Hz decay=${decayRange.value}dB`
-    );
-  }
-
-  copySettingsBtn.addEventListener("click", async () => {
-    const text = currentSettingsText();
-    settingsText.value = text;
-    try {
-      await navigator.clipboard.writeText(text);
-      copyFeedback.textContent = "コピーしました!";
-    } catch {
-      settingsText.select();
-      copyFeedback.textContent = "自動コピーできなかったので、下の欄から手動でコピーしてください。";
-    }
-    clearTimeout(copySettingsBtn._t);
-    copySettingsBtn._t = setTimeout(() => { copyFeedback.textContent = ""; }, 4000);
   });
 })();
