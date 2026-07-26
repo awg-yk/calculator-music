@@ -52,8 +52,8 @@
         <div class="tune-grid">
           <label class="tune-field">
             パルス幅 (duty)
-            <input type="range" id="dutyRange" min="0.05" max="0.5" step="0.01" value="0.22">
-            <output id="dutyOut" for="dutyRange">0.22</output>
+            <input type="range" id="dutyRange" min="0.05" max="0.5" step="0.01" value="0.5">
+            <output id="dutyOut" for="dutyRange">0.50</output>
           </label>
           <label class="tune-field">
             ハイパス カットオフ (Hz)
@@ -62,18 +62,23 @@
           </label>
           <label class="tune-field">
             ピーク周波数 (Hz)
-            <input type="range" id="peakFreqRange" min="500" max="8000" step="50" value="3000">
-            <output id="peakFreqOut" for="peakFreqRange">3000</output>
+            <input type="range" id="peakFreqRange" min="500" max="8000" step="50" value="1700">
+            <output id="peakFreqOut" for="peakFreqRange">1700</output>
           </label>
           <label class="tune-field">
             ピークQ(鋭さ)
-            <input type="range" id="peakQRange" min="0.2" max="10" step="0.1" value="1.1">
-            <output id="peakQOut" for="peakQRange">1.1</output>
+            <input type="range" id="peakQRange" min="0.2" max="10" step="0.1" value="1.2">
+            <output id="peakQOut" for="peakQRange">1.2</output>
           </label>
           <label class="tune-field">
             ピークゲイン (dB)
-            <input type="range" id="peakGainRange" min="0" max="24" step="0.5" value="9">
-            <output id="peakGainOut" for="peakGainRange">9</output>
+            <input type="range" id="peakGainRange" min="0" max="24" step="0.5" value="3">
+            <output id="peakGainOut" for="peakGainRange">3</output>
+          </label>
+          <label class="tune-field">
+            ローパス カットオフ (Hz)
+            <input type="range" id="lowpassRange" min="1000" max="10000" step="100" value="3500">
+            <output id="lowpassOut" for="lowpassRange">3500</output>
           </label>
           <label class="tune-field">
             アタック (ms)

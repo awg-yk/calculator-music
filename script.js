@@ -13,6 +13,7 @@
   const peakFreqRange = document.getElementById("peakFreqRange");
   const peakQRange = document.getElementById("peakQRange");
   const peakGainRange = document.getElementById("peakGainRange");
+  const lowpassRange = document.getElementById("lowpassRange");
   const attackRange = document.getElementById("attackRange");
   const decayRange = document.getElementById("decayRange");
   const sustainRange = document.getElementById("sustainRange");
@@ -142,9 +143,11 @@
     applyWaveform(osc, ctx);
     osc.frequency.value = freq;
 
-    // Piezo elements have almost no bass response and a bright resonant
-    // peak; a highpass + peaking filter pushes the synthesized tone toward
-    // that harsh, tinny character. All values come from the tuning panel.
+    // Cross-checked against real recordings of C4/G4/C5: harmonic content
+    // is odd-only (a near-50% duty pulse, see getPiezoWave) and generally
+    // rolls off toward the high end, with a mild, noisy hint of extra
+    // presence somewhere in the 1.5-2kHz range - hence a gentle highpass
+    // + modest peak + lowpass rather than a strong, precisely-located EQ.
     const highpass = ctx.createBiquadFilter();
     highpass.type = "highpass";
     highpass.frequency.value = parseFloat(highpassRange.value);
@@ -154,6 +157,11 @@
     peak_filter.frequency.value = parseFloat(peakFreqRange.value);
     peak_filter.Q.value = parseFloat(peakQRange.value);
     peak_filter.gain.value = parseFloat(peakGainRange.value);
+
+    const lowpass = ctx.createBiquadFilter();
+    lowpass.type = "lowpass";
+    lowpass.frequency.value = parseFloat(lowpassRange.value);
+    lowpass.Q.value = 0.7;
 
     const gain = ctx.createGain();
     const peak = parseFloat(volumeRange.value);
@@ -169,7 +177,7 @@
     // of peak over a couple hundred ms.
     gain.gain.setTargetAtTime(sustainFloor, now + attackSec, decaySec);
 
-    osc.connect(highpass).connect(peak_filter).connect(gain).connect(ctx.destination);
+    osc.connect(highpass).connect(peak_filter).connect(lowpass).connect(gain).connect(ctx.destination);
     osc.start(now);
     playClickTransient(ctx, now);
 
@@ -429,6 +437,7 @@
     [peakFreqRange, "peakFreqOut", 0],
     [peakQRange, "peakQOut", 1],
     [peakGainRange, "peakGainOut", 1],
+    [lowpassRange, "lowpassOut", 0],
     [attackRange, "attackOut", 0],
     [decayRange, "decayOut", 0],
     [sustainRange, "sustainOut", 0],
@@ -447,6 +456,7 @@
       `wave=${waveSelect.value} duty=${dutyRange.value} ` +
       `highpass=${highpassRange.value}Hz peakFreq=${peakFreqRange.value}Hz ` +
       `peakQ=${peakQRange.value} peakGain=${peakGainRange.value}dB ` +
+      `lowpass=${lowpassRange.value}Hz ` +
       `attack=${attackRange.value}ms decay=${decayRange.value}ms ` +
       `sustain=${sustainRange.value}% release=${releaseRange.value}ms ` +
       `click=${clickRange.value}`
