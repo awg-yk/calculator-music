@@ -1,10 +1,6 @@
 (() => {
   "use strict";
 
-  const display = document.getElementById("display");
-  const iconNote = document.getElementById("icon-note");
-  const volumeBadge = document.getElementById("volume-badge");
-
   const SOLFEGE = { C: "ド", D: "レ", E: "ミ", F: "ファ", G: "ソ", A: "ラ", B: "シ" };
 
   // The real unit is tuned to Db major, not C major: the note under "1" is
@@ -41,13 +37,24 @@
     btn.appendChild(label);
   });
 
-  // ---------- Volume (5 discrete steps, shown small in the screen's corner) ----------
+  // Add small keyboard-letter hints onto the second calculator's keys (its
+  // main label matches the first calculator's digits/symbols, so it needs a
+  // separate hint for which physical key actually plays it).
+  document.querySelectorAll("#calc2 .key[data-letter]").forEach((btn) => {
+    const hint = document.createElement("span");
+    hint.className = "key-hint";
+    hint.textContent = btn.dataset.letter.toUpperCase();
+    btn.appendChild(hint);
+  });
+
+  // ---------- Volume (5 discrete steps, shown small in each screen's corner) ----------
   const VOLUME_LEVELS = [0.2, 0.4, 0.6, 0.8, 1.0];
   let volumeIndex = 2;
 
   function renderVolume() {
     const level = volumeIndex + 1;
-    volumeBadge.textContent = "音量 " + "■".repeat(level) + "□".repeat(VOLUME_LEVELS.length - level);
+    const text = "音量 " + "■".repeat(level) + "□".repeat(VOLUME_LEVELS.length - level);
+    document.querySelectorAll(".volume-badge").forEach((el) => { el.textContent = text; });
   }
 
   function setVolume(index) {
@@ -59,16 +66,16 @@
   renderVolume();
 
   // ---------- Digit display (cosmetic echo of the last digits typed) ----------
-  let typedDigits = "0";
+  // Each calculator has its own display, echoing only what was typed on it.
   const MAX_TYPED_LEN = 20;
+  const typedDigits = new Map(); // calc element -> string
 
-  function renderTyped() {
-    display.textContent = typedDigits;
-  }
-
-  function appendDigit(d) {
-    typedDigits = typedDigits === "0" ? d : (typedDigits + d).slice(-MAX_TYPED_LEN);
-    renderTyped();
+  function appendDigit(btn, d) {
+    const calcEl = btn.closest(".calc");
+    const current = typedDigits.get(calcEl) || "0";
+    const next = current === "0" ? d : (current + d).slice(-MAX_TYPED_LEN);
+    typedDigits.set(calcEl, next);
+    calcEl.querySelector(".display").textContent = next;
   }
 
   // ---------- Audio ----------
@@ -226,6 +233,7 @@
 
     activeVoices.set(voiceId, { src, gain });
 
+    const iconNote = voiceId.closest(".calc").querySelector(".note-name");
     iconNote.textContent = noteLabel(actualNote) + " (" + actualNote + ")";
     iconNote.classList.add("active");
   }
@@ -241,7 +249,10 @@
     voice.gain.gain.exponentialRampToValueAtTime(0.0001, now + RELEASE_SEC);
     voice.src.stop(now + RELEASE_SEC + 0.03);
     activeVoices.delete(voiceId);
-    if (activeVoices.size === 0) iconNote.classList.remove("active");
+
+    const calcEl = voiceId.closest(".calc");
+    const stillPlaying = Array.from(activeVoices.keys()).some((b) => b.closest(".calc") === calcEl);
+    if (!stillPlaying) calcEl.querySelector(".note-name").classList.remove("active");
   }
 
   function stopAllVoices() {
@@ -292,7 +303,7 @@
   function handleKeyDown(btn) {
     pressVisual(btn);
 
-    if (btn.dataset.digit !== undefined) appendDigit(btn.dataset.digit);
+    if (btn.dataset.digit !== undefined) appendDigit(btn, btn.dataset.digit);
 
     if (btn.dataset.note) {
       startVoice(btn, btn.dataset.note);
@@ -348,19 +359,21 @@
   });
 
   // ---------- PC keyboard support ----------
+  // Number-row/numpad and +-*/=  are scoped to the first calculator only -
+  // the second calculator reuses the same digit/symbol labels (per the
+  // "same appearance" requirement), so it is played exclusively via
+  // LETTER_KEYMAP below to avoid the two calculators fighting over a key.
   const KEYMAP = {};
-  document.querySelectorAll(".key").forEach((btn) => {
-    if (btn.dataset.digit !== undefined && btn.dataset.digit.length === 1) {
-      KEYMAP[btn.dataset.digit] = btn;
-    }
+  document.querySelectorAll("#calc .key[data-digit]").forEach((btn) => {
+    if (btn.dataset.digit.length === 1) KEYMAP[btn.dataset.digit] = btn;
   });
   const OP_KEYMAP = {
-    "/": document.querySelector('[data-op="÷"]'),
-    "*": document.querySelector('[data-op="×"]'),
-    "-": document.querySelector('[data-op="−"]'),
-    "+": document.querySelector('[data-op="+"]'),
-    "=": document.querySelector('[data-eq="="]'),
-    Enter: document.querySelector('[data-eq="="]'),
+    "/": document.querySelector('#calc [data-op="÷"]'),
+    "*": document.querySelector('#calc [data-op="×"]'),
+    "-": document.querySelector('#calc [data-op="−"]'),
+    "+": document.querySelector('#calc [data-op="+"]'),
+    "=": document.querySelector('#calc [data-eq="="]'),
+    Enter: document.querySelector('#calc [data-eq="="]'),
   };
   const LETTER_KEYMAP = {};
   document.querySelectorAll("#calc2 .key[data-letter]").forEach((btn) => {

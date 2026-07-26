@@ -32,13 +32,21 @@ body {
 
 .page {
   width: 100%;
-  max-width: 480px;
+  max-width: 1000px;
 }
 
 h1 {
   text-align: center;
   font-size: 1.3rem;
-  margin: 4px 0 20px;
+  margin: 4px auto 20px;
+  max-width: 480px;
+}
+
+.calc-row {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 .calc {
@@ -49,6 +57,8 @@ h1 {
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
+  width: 100%;
+  max-width: 480px;
 }
 
 .calc-top {
@@ -133,18 +143,10 @@ h1 {
   font-size: 0.8rem;
 }
 
-.calc-secondary {
-  margin-top: 16px;
-}
-
 .keys {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 8px;
-}
-
-.keys-secondary {
-  grid-template-columns: repeat(3, 1fr);
 }
 
 .key {
@@ -214,6 +216,15 @@ h1 {
 }
 .music-mode .note-label {
   opacity: 1;
+}
+
+.key-hint {
+  position: absolute;
+  top: 3px;
+  right: 6px;
+  font-size: 0.55rem;
+  font-weight: 600;
+  color: #5a6270;
 }
 
 .legend {

@@ -15,62 +15,85 @@
       <button id="calcCountToggle" class="key key-fn calc-count-btn" type="button">電卓を2台にする(左手用を追加)</button>
     </div>
 
-    <div class="calc music-mode" id="calc">
-      <div class="calc-top">
-        <div class="solar" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
-        <div class="brand">CALC MUSIC</div>
-      </div>
-
-      <div class="screen">
-        <div class="screen-icons">
-          <span id="icon-note" class="icon note-name"></span>
-          <span id="volume-badge" class="icon active"></span>
+    <div class="calc-row">
+      <div class="calc music-mode" id="calc2" hidden>
+        <div class="calc-top">
+          <div class="solar" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+          <div class="brand">CALC MUSIC</div>
         </div>
-        <div class="display" id="display">0</div>
+
+        <div class="screen">
+          <div class="screen-icons">
+            <span class="icon note-name"></span>
+            <span class="icon active volume-badge"></span>
+          </div>
+          <div class="display">0</div>
+        </div>
+
+        <div class="keys">
+          <button class="key key-num" data-note="C4" data-digit="7" data-letter="q">7</button>
+          <button class="key key-num" data-note="Db4" data-digit="8" data-letter="w">8</button>
+          <button class="key key-num" data-note="Eb4" data-digit="9" data-letter="e">9</button>
+          <button class="key key-fn" data-vol="down" data-letter="r">M−</button>
+          <button class="key key-fn" data-vol="up" data-letter="t">M+</button>
+
+          <button class="key key-num" data-note="Gb3" data-digit="4" data-letter="a">4</button>
+          <button class="key key-num" data-note="Ab3" data-digit="5" data-letter="s">5</button>
+          <button class="key key-num" data-note="Bb3" data-digit="6" data-letter="d">6</button>
+          <button class="key key-op" data-note="Ab4" data-op="×" data-letter="f">×</button>
+          <button class="key key-op" data-note="Bb4" data-op="÷" data-letter="g">÷</button>
+
+          <button class="key key-num" data-note="Db3" data-digit="1" data-letter="z">1</button>
+          <button class="key key-num" data-note="Eb3" data-digit="2" data-letter="x">2</button>
+          <button class="key key-num" data-note="F3" data-digit="3" data-letter="c">3</button>
+          <button class="key key-op key-plus" data-note="F4" data-op="+" data-letter="v">+</button>
+          <button class="key key-op" data-note="Gb4" data-op="−" data-letter="b">−</button>
+
+          <button class="key key-num key-zero" data-digit="0">0</button>
+          <button class="key key-fn" data-transpose="down">▼</button>
+          <button class="key key-fn" data-transpose="up">▲</button>
+          <button class="key key-eq key-note" data-note="C5" data-eq="=">=</button>
+        </div>
       </div>
 
-      <div class="keys">
-        <button class="key key-num" data-note="C5" data-digit="7">7</button>
-        <button class="key key-num" data-note="Db5" data-digit="8">8</button>
-        <button class="key key-num" data-note="Eb5" data-digit="9">9</button>
-        <button class="key key-fn" data-vol="down">M−</button>
-        <button class="key key-fn" data-vol="up">M+</button>
+      <div class="calc music-mode" id="calc">
+        <div class="calc-top">
+          <div class="solar" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+          <div class="brand">CALC MUSIC</div>
+        </div>
 
-        <button class="key key-num" data-note="Gb4" data-digit="4">4</button>
-        <button class="key key-num" data-note="Ab4" data-digit="5">5</button>
-        <button class="key key-num" data-note="Bb4" data-digit="6">6</button>
-        <button class="key key-op" data-note="Ab5" data-op="×">×</button>
-        <button class="key key-op" data-note="Bb5" data-op="÷">÷</button>
+        <div class="screen">
+          <div class="screen-icons">
+            <span class="icon note-name"></span>
+            <span class="icon active volume-badge"></span>
+          </div>
+          <div class="display">0</div>
+        </div>
 
-        <button class="key key-num" data-note="Db4" data-digit="1">1</button>
-        <button class="key key-num" data-note="Eb4" data-digit="2">2</button>
-        <button class="key key-num" data-note="F4" data-digit="3">3</button>
-        <button class="key key-op key-plus" data-note="F5" data-op="+">+</button>
-        <button class="key key-op" data-note="Gb5" data-op="−">−</button>
+        <div class="keys">
+          <button class="key key-num" data-note="C5" data-digit="7">7</button>
+          <button class="key key-num" data-note="Db5" data-digit="8">8</button>
+          <button class="key key-num" data-note="Eb5" data-digit="9">9</button>
+          <button class="key key-fn" data-vol="down">M−</button>
+          <button class="key key-fn" data-vol="up">M+</button>
 
-        <button class="key key-num key-zero" data-digit="0">0</button>
-        <button class="key key-fn" data-transpose="down">▼</button>
-        <button class="key key-fn" data-transpose="up">▲</button>
-        <button class="key key-eq key-note" data-note="C6" data-eq="=">=</button>
-      </div>
-    </div>
+          <button class="key key-num" data-note="Gb4" data-digit="4">4</button>
+          <button class="key key-num" data-note="Ab4" data-digit="5">5</button>
+          <button class="key key-num" data-note="Bb4" data-digit="6">6</button>
+          <button class="key key-op" data-note="Ab5" data-op="×">×</button>
+          <button class="key key-op" data-note="Bb5" data-op="÷">÷</button>
 
-    <div class="calc music-mode calc-secondary" id="calc2" hidden>
-      <div class="calc-top">
-        <div class="brand">CALC MUSIC 2(左手用)</div>
-      </div>
-      <div class="keys keys-secondary">
-        <button class="key key-num" data-note="C4" data-letter="q">Q</button>
-        <button class="key key-num" data-note="Db4" data-letter="w">W</button>
-        <button class="key key-num" data-note="Eb4" data-letter="e">E</button>
+          <button class="key key-num" data-note="Db4" data-digit="1">1</button>
+          <button class="key key-num" data-note="Eb4" data-digit="2">2</button>
+          <button class="key key-num" data-note="F4" data-digit="3">3</button>
+          <button class="key key-op key-plus" data-note="F5" data-op="+">+</button>
+          <button class="key key-op" data-note="Gb5" data-op="−">−</button>
 
-        <button class="key key-num" data-note="Gb3" data-letter="a">A</button>
-        <button class="key key-num" data-note="Ab3" data-letter="s">S</button>
-        <button class="key key-num" data-note="Bb3" data-letter="d">D</button>
-
-        <button class="key key-num" data-note="Db3" data-letter="z">Z</button>
-        <button class="key key-num" data-note="Eb3" data-letter="x">X</button>
-        <button class="key key-num" data-note="F3" data-letter="c">C</button>
+          <button class="key key-num key-zero" data-digit="0">0</button>
+          <button class="key key-fn" data-transpose="down">▼</button>
+          <button class="key key-fn" data-transpose="up">▲</button>
+          <button class="key key-eq key-note" data-note="C6" data-eq="=">=</button>
+        </div>
       </div>
     </div>
 
@@ -85,7 +108,7 @@
         <li><b>M−</b> / <b>M+</b> で音量を5段階に調整できます。現在の音量は液晶右上に表示されます。</li>
         <li><b>▼</b> / <b>▲</b> で全体の音程を±2半音の範囲で調整できます。</li>
         <li>数字キーを押すと、押した数字が液晶に表示されます。</li>
-        <li>「電卓を2台にする」ボタンで左手用の電卓が追加され、演奏の幅が広がります。右手は数字・演算子キー(<code>1234567890</code>など)、左手はキーボードの <code>qweasdzxc</code> で1オクターブ下を演奏できます。</li>
+        <li>「電卓を2台にする」ボタンで左側に左手用の電卓が追加され、演奏の幅が広がります。見た目・キー配置は右の電卓と同じで、各キーの右上に小さく書かれたアルファベットがPCキーボードでの対応キーです:<code>qwertasdfgzxcvb</code>(1オクターブ下)。</li>
         <li>音色は奇数倍音の加算合成で、倍音ごとにゆっくり揺れる余弦変調をかけています。この「ゆらぎ」が電卓らしいザラついた質感の正体です(「ブレンド」設定で固定)。</li>
       </ul>
       <p class="note">
