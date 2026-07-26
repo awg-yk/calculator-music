@@ -19,6 +19,13 @@
 
   const NOTE_RE = /^([A-G])(b?)(\d)$/;
 
+  // Each calculator gets its own volume and transpose state (and, further
+  // down, its own audio nodes) - they used to share one, which linked the
+  // two calculators' controls together.
+  const CALC_ELS = Array.from(document.querySelectorAll(".calc"));
+  const calcState = new Map(); // calc element -> { volumeIndex, semitoneShift }
+  CALC_ELS.forEach((calcEl) => calcState.set(calcEl, { volumeIndex: 2, semitoneShift: 0 }));
+
   function noteLabel(note) {
     const [, letter, flat, octaveStr] = note.match(NOTE_RE);
     const octave = parseInt(octaveStr, 10);
@@ -53,21 +60,21 @@
 
   // ---------- Volume (5 discrete steps, shown small in each screen's corner) ----------
   const VOLUME_LEVELS = [0.2, 0.4, 0.6, 0.8, 1.0];
-  let volumeIndex = 2;
 
-  function renderVolume() {
-    const level = volumeIndex + 1;
+  function renderVolume(calcEl) {
+    const level = calcState.get(calcEl).volumeIndex + 1;
     const text = "音量 " + "■".repeat(level) + "□".repeat(VOLUME_LEVELS.length - level);
-    document.querySelectorAll(".volume-badge").forEach((el) => { el.textContent = text; });
+    calcEl.querySelector(".volume-badge").textContent = text;
   }
 
-  function setVolume(index) {
-    volumeIndex = Math.max(0, Math.min(VOLUME_LEVELS.length - 1, index));
-    syncFilters();
-    renderVolume();
+  function setVolume(calcEl, index) {
+    const state = calcState.get(calcEl);
+    state.volumeIndex = Math.max(0, Math.min(VOLUME_LEVELS.length - 1, index));
+    syncFilters(calcEl);
+    renderVolume(calcEl);
   }
 
-  renderVolume();
+  CALC_ELS.forEach(renderVolume);
 
   // ---------- Digit display (cosmetic echo of the last digits typed) ----------
   // Each calculator has its own display, echoing only what was typed on it.
@@ -93,64 +100,74 @@
   const FILTER_SETTINGS = { resF: 1450, resG: 5, lp: 3200, decayDb: 12 };
 
   let audioCtx = null;
-  let dipFilter = null;
-  let resFilter = null;
-  let lpFilter = null;
-  let masterGain = null;
+  // Each calculator gets its own dip -> resonance -> lowpass -> gain chain
+  // (same fixed tone settings, independent nodes) so its volume knob only
+  // affects its own output.
+  const calcAudioNodes = new Map(); // calc element -> { dipFilter, resFilter, lpFilter, masterGain }
+
+  function createCalcAudioChain(ctx) {
+    const dipFilter = ctx.createBiquadFilter();
+    dipFilter.type = "peaking";
+    dipFilter.frequency.value = 820;
+    dipFilter.Q.value = 1.4;
+    dipFilter.gain.value = -4;
+
+    const resFilter = ctx.createBiquadFilter();
+    resFilter.type = "peaking";
+    resFilter.Q.value = 1.6;
+    resFilter.frequency.value = FILTER_SETTINGS.resF;
+    resFilter.gain.value = FILTER_SETTINGS.resG;
+
+    const lpFilter = ctx.createBiquadFilter();
+    lpFilter.type = "lowpass";
+    lpFilter.Q.value = 0.7;
+    lpFilter.frequency.value = FILTER_SETTINGS.lp;
+
+    const masterGain = ctx.createGain();
+
+    dipFilter.connect(resFilter);
+    resFilter.connect(lpFilter);
+    lpFilter.connect(masterGain);
+    masterGain.connect(ctx.destination);
+
+    return { dipFilter, resFilter, lpFilter, masterGain };
+  }
 
   function getCtx() {
     if (!audioCtx) {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-      dipFilter = audioCtx.createBiquadFilter();
-      dipFilter.type = "peaking";
-      dipFilter.frequency.value = 820;
-      dipFilter.Q.value = 1.4;
-      dipFilter.gain.value = -4;
-
-      resFilter = audioCtx.createBiquadFilter();
-      resFilter.type = "peaking";
-      resFilter.Q.value = 1.6;
-
-      lpFilter = audioCtx.createBiquadFilter();
-      lpFilter.type = "lowpass";
-      lpFilter.Q.value = 0.7;
-
-      masterGain = audioCtx.createGain();
-
-      dipFilter.connect(resFilter);
-      resFilter.connect(lpFilter);
-      lpFilter.connect(masterGain);
-      masterGain.connect(audioCtx.destination);
-      syncFilters();
+      CALC_ELS.forEach((calcEl) => {
+        calcAudioNodes.set(calcEl, createCalcAudioChain(audioCtx));
+        syncFilters(calcEl);
+      });
       warmUpBuffers();
     }
     if (audioCtx.state === "suspended") audioCtx.resume();
     return audioCtx;
   }
 
-  function syncFilters() {
-    if (!audioCtx) return;
-    resFilter.frequency.value = FILTER_SETTINGS.resF;
-    resFilter.gain.value = FILTER_SETTINGS.resG;
-    lpFilter.frequency.value = FILTER_SETTINGS.lp;
-    masterGain.gain.value = VOLUME_LEVELS[volumeIndex];
+  function syncFilters(calcEl) {
+    const nodes = calcAudioNodes.get(calcEl);
+    if (!nodes) return;
+    nodes.masterGain.gain.value = VOLUME_LEVELS[calcState.get(calcEl).volumeIndex];
   }
 
   // Fine pitch adjustment via the ▼/▲ keys, in semitones (not whole octaves).
+  // Each calculator has its own transpose, applied only to its own notes.
   const CHROMATIC = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
   const MAX_SEMITONE_SHIFT = 2;
-  let semitoneShift = 0;
 
-  function setSemitoneShift(value) {
-    semitoneShift = Math.max(-MAX_SEMITONE_SHIFT, Math.min(MAX_SEMITONE_SHIFT, value));
-    refreshNoteLabels();
+  function setSemitoneShift(calcEl, value) {
+    const state = calcState.get(calcEl);
+    state.semitoneShift = Math.max(-MAX_SEMITONE_SHIFT, Math.min(MAX_SEMITONE_SHIFT, value));
+    refreshNoteLabels(calcEl);
   }
 
-  function shiftNote(note) {
-    if (semitoneShift === 0) return note;
+  function shiftNote(calcEl, note) {
+    const shift = calcState.get(calcEl).semitoneShift;
+    if (shift === 0) return note;
     const [, letter, flat, octaveStr] = note.match(NOTE_RE);
-    let idx = CHROMATIC.indexOf(letter + flat) + semitoneShift;
+    let idx = CHROMATIC.indexOf(letter + flat) + shift;
     let octave = parseInt(octaveStr, 10) + Math.floor(idx / 12);
     idx = ((idx % 12) + 12) % 12;
     const shifted = CHROMATIC[idx] + octave;
@@ -159,12 +176,13 @@
 
   // The on-key solfège label always reflects the currently sounding
   // (transposed) note, not just the button's base note.
-  function refreshNoteLabels() {
+  function refreshNoteLabels(calcEl) {
     noteLabelEntries.forEach(({ btn, label }) => {
-      label.textContent = noteLabel(shiftNote(btn.dataset.note));
+      if (btn.closest(".calc") !== calcEl) return;
+      label.textContent = noteLabel(shiftNote(calcEl, btn.dataset.note));
     });
   }
-  refreshNoteLabels();
+  CALC_ELS.forEach(refreshNoteLabels);
 
   // The workbench renders a one-shot buffer, but here a key can be held
   // indefinitely, so the buffer has to loop cleanly. Every partial and every
@@ -222,8 +240,9 @@
 
   function startVoice(voiceId, note) {
     if (activeVoices.has(voiceId)) return;
+    const calcEl = voiceId.closest(".calc");
     const ctx = getCtx();
-    const actualNote = shiftNote(note);
+    const actualNote = shiftNote(calcEl, note);
     const freq = NOTE_FREQ[actualNote];
     if (!freq) return;
 
@@ -242,18 +261,20 @@
     gain.gain.exponentialRampToValueAtTime(Math.max(tail, 0.0015), now + 0.35);
 
     src.connect(gain);
-    gain.connect(dipFilter);
+    gain.connect(calcAudioNodes.get(calcEl).dipFilter);
     src.start(now);
 
-    // Safety backstop: if a pointerup/keyup is ever missed (seen occasionally
-    // on the second calculator, likely a lost pointer-capture event), force
-    // the note off after a generous hold time rather than let it loop forever.
-    const MAX_HOLD_MS = 20000;
+    // Safety backstop: if a release is ever missed (seen occasionally on the
+    // second calculator, likely a lost pointer-capture event), force the
+    // note off soon rather than let it loop indefinitely. Kept short since a
+    // normal release only takes ~0.5s (RELEASE_SEC below) - this only exists
+    // to bound the worst case.
+    const MAX_HOLD_MS = 2000;
     const safetyTimer = setTimeout(() => stopVoice(voiceId), MAX_HOLD_MS);
 
     activeVoices.set(voiceId, { src, gain, safetyTimer });
 
-    const iconNote = voiceId.closest(".calc").querySelector(".note-name");
+    const iconNote = calcEl.querySelector(".note-name");
     iconNote.textContent = noteLabel(actualNote) + " (" + actualNote + ")";
     iconNote.classList.add("active");
   }
@@ -280,28 +301,13 @@
     activeVoices.forEach((_voice, voiceId) => stopVoice(voiceId));
   }
 
-  function playClick() {
-    // "0" has no assigned pitch on the real unit; give it a short neutral click.
-    const ctx = getCtx();
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "square";
-    osc.frequency.value = 180;
-    gain.gain.setValueAtTime(0.5, now);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
-    osc.connect(gain).connect(dipFilter);
-    osc.start(now);
-    osc.stop(now + 0.06);
-  }
-
   // Rendering a 2s additive buffer takes tens of milliseconds, which would be
   // an audible hitch on the first press of each key. Build them ahead of time
   // in small chunks once the audio context is running, so playing stays responsive.
   function warmUpBuffers() {
     const ctx = audioCtx;
     const notes = Array.from(document.querySelectorAll(".key[data-note]"))
-      .map((btn) => NOTE_FREQ[shiftNote(btn.dataset.note)])
+      .map((btn) => NOTE_FREQ[shiftNote(btn.closest(".calc"), btn.dataset.note)])
       .filter(Boolean);
     let i = 0;
     const step = () => {
@@ -318,30 +324,31 @@
     setTimeout(() => btn.classList.remove("pressed"), 120);
   }
 
-  // Key-down: starts a sustained note, a one-shot click, a volume/transpose
-  // step, and/or echoes a pressed digit to the display (these are independent
-  // of each other - a note key like "1" both plays and echoes).
+  // Key-down: starts a sustained note, a volume/transpose step, and/or
+  // echoes a pressed digit to the display (these are independent of each
+  // other - a note key like "1" both plays and echoes). "0" is purely
+  // decorative: it does not echo, and it makes no sound.
   function handleKeyDown(btn) {
     pressVisual(btn);
 
-    // "0" has no assigned pitch and is deliberately left out of the digit
-    // echo too - it should only produce the click sound below.
     if (btn.dataset.digit !== undefined && btn.dataset.digit !== "0") {
       appendDigit(btn, btn.dataset.digit);
     }
 
     if (btn.dataset.note) {
       startVoice(btn, btn.dataset.note);
-    } else if (btn.dataset.digit === "0") {
-      playClick();
-    } else if (btn.dataset.vol === "down") {
-      setVolume(volumeIndex - 1);
+      return;
+    }
+
+    const calcEl = btn.closest(".calc");
+    if (btn.dataset.vol === "down") {
+      setVolume(calcEl, calcState.get(calcEl).volumeIndex - 1);
     } else if (btn.dataset.vol === "up") {
-      setVolume(volumeIndex + 1);
+      setVolume(calcEl, calcState.get(calcEl).volumeIndex + 1);
     } else if (btn.dataset.transpose === "down") {
-      setSemitoneShift(semitoneShift - 1);
+      setSemitoneShift(calcEl, calcState.get(calcEl).semitoneShift - 1);
     } else if (btn.dataset.transpose === "up") {
-      setSemitoneShift(semitoneShift + 1);
+      setSemitoneShift(calcEl, calcState.get(calcEl).semitoneShift + 1);
     }
   }
 
@@ -350,10 +357,16 @@
     if (btn.dataset.note) stopVoice(btn);
   }
 
+  // Tracks which button each active pointer is sounding, so a release can
+  // still be resolved even if the browser delivers it somewhere other than
+  // the originally captured element (see the window-level fallback below).
+  const pointerVoices = new Map(); // pointerId -> btn
+
   document.querySelectorAll(".key").forEach((btn) => {
     btn.addEventListener("pointerdown", (e) => {
       e.preventDefault();
       btn.setPointerCapture(e.pointerId);
+      pointerVoices.set(e.pointerId, btn);
       getCtx();
       handleKeyDown(btn);
     });
@@ -362,7 +375,22 @@
     // Belt-and-braces: fires whenever capture ends for any reason, in case a
     // pointerup/pointercancel is ever swallowed (see MAX_HOLD_MS above too).
     btn.addEventListener("lostpointercapture", () => handleKeyUp(btn));
+    // Some mobile browsers have historically been more reliable with touch
+    // events than the pointer events they're supposed to unify with.
+    btn.addEventListener("touchend", () => handleKeyUp(btn), { passive: true });
+    btn.addEventListener("touchcancel", () => handleKeyUp(btn), { passive: true });
   });
+
+  // Window-level fallback: if a release event never reaches the button
+  // itself for any reason, this still catches it via the pointerId.
+  function releasePointerVoice(e) {
+    const btn = pointerVoices.get(e.pointerId);
+    if (!btn) return;
+    pointerVoices.delete(e.pointerId);
+    handleKeyUp(btn);
+  }
+  window.addEventListener("pointerup", releasePointerVoice);
+  window.addEventListener("pointercancel", releasePointerVoice);
 
   // If the tab loses focus while a key is physically held, the pointerup
   // may never arrive - stop everything rather than leave a note droning.
@@ -423,21 +451,24 @@
     CALC2_KEYMAP[btn.dataset.letter] = btn;
   });
 
+  // Tracked by normalized token (not raw e.key) so a keyup reported with
+  // different casing than its keydown (seen with some layouts/modifiers)
+  // still clears correctly instead of leaving the key stuck as "held".
   const heldKeys = new Set();
   window.addEventListener("keydown", (e) => {
-    if (heldKeys.has(e.key)) return; // ignore OS key-repeat
     const token = normalizeKey(e.key);
+    if (heldKeys.has(token)) return; // ignore OS key-repeat
     const btn = KEYMAP[e.key] || OP_KEYMAP[e.key] || CALC1_KEYMAP[token] ||
       (calc2Enabled ? CALC2_KEYMAP[token] : undefined);
     if (!btn) return;
-    heldKeys.add(e.key);
+    heldKeys.add(token);
     e.preventDefault();
     getCtx();
     handleKeyDown(btn);
   });
   window.addEventListener("keyup", (e) => {
-    heldKeys.delete(e.key);
     const token = normalizeKey(e.key);
+    heldKeys.delete(token);
     const btn = KEYMAP[e.key] || OP_KEYMAP[e.key] || CALC1_KEYMAP[token] || CALC2_KEYMAP[token];
     if (btn) handleKeyUp(btn);
   });
