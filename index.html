@@ -11,6 +11,10 @@
   <main class="page">
     <h1>電卓ミュージック</h1>
 
+    <div class="calc-count-row">
+      <button id="calcCountToggle" class="key key-fn calc-count-btn" type="button">電卓を2台にする(左手用を追加)</button>
+    </div>
+
     <div class="calc music-mode" id="calc">
       <div class="calc-top">
         <div class="solar" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
@@ -19,10 +23,10 @@
 
       <div class="screen">
         <div class="screen-icons">
-          <span id="icon-music" class="icon active">♪ MUSIC</span>
           <span id="icon-note" class="icon note-name"></span>
+          <span id="volume-badge" class="icon active"></span>
         </div>
-        <div class="display" id="display"></div>
+        <div class="display" id="display">0</div>
       </div>
 
       <div class="keys">
@@ -45,28 +49,50 @@
         <button class="key key-op" data-note="Gb5" data-op="−">−</button>
 
         <button class="key key-num key-zero" data-digit="0">0</button>
-        <button class="key key-num" data-digit="00">00</button>
-        <button class="key key-num" data-digit=".">.</button>
+        <button class="key key-fn" data-transpose="down">▼</button>
+        <button class="key key-fn" data-transpose="up">▲</button>
         <button class="key key-eq key-note" data-note="C6" data-eq="=">=</button>
       </div>
     </div>
 
-    <section class="legend">
-      <h2>あそびかた</h2>
+    <div class="calc music-mode calc-secondary" id="calc2" hidden>
+      <div class="calc-top">
+        <div class="brand">CALC MUSIC 2(左手用)</div>
+      </div>
+      <div class="keys keys-secondary">
+        <button class="key key-num" data-note="C4" data-letter="q">Q</button>
+        <button class="key key-num" data-note="Db4" data-letter="w">W</button>
+        <button class="key key-num" data-note="Eb4" data-letter="e">E</button>
+
+        <button class="key key-num" data-note="Gb3" data-letter="a">A</button>
+        <button class="key key-num" data-note="Ab3" data-letter="s">S</button>
+        <button class="key key-num" data-note="Bb3" data-letter="d">D</button>
+
+        <button class="key key-num" data-note="Db3" data-letter="z">Z</button>
+        <button class="key key-num" data-note="Eb3" data-letter="x">X</button>
+        <button class="key key-num" data-note="F3" data-letter="c">C</button>
+      </div>
+    </div>
+
+    <details class="legend">
+      <summary>あそびかた</summary>
       <ul>
         <li>数字・演算子キーがドレミの鍵盤になっています。</li>
         <li>キーの並びは実機と同じ:実機は変ニ長調に調律されており、<code>1〜7</code>がレ♭・ミ♭・ファ・ソ♭・ラ♭・シ♭・ド(低いオクターブ)、<code>8, 9, ×, ÷, +, −, =</code>が1オクターブ上のレ♭〜ドです。</li>
         <li>キーを押している間だけ音が鳴ります(実機と同じで、長押しすれば音を伸ばせます)。</li>
         <li>PCキーボードでも演奏できます:数字キー <code>1234567890</code>、記号キー <code>+ - * / =</code> に対応。</li>
         <li>スマホ・タブレットではマルチタッチ対応なので、和音っぽく複数キー同時押しも可能です。</li>
-        <li><b>M−</b> / <b>M+</b> で音量を5段階に調整できます。現在の音量は液晶に表示されます。</li>
+        <li><b>M−</b> / <b>M+</b> で音量を5段階に調整できます。現在の音量は液晶右上に表示されます。</li>
+        <li><b>▼</b> / <b>▲</b> で全体の音程を±2半音の範囲で調整できます。</li>
+        <li>数字キーを押すと、押した数字が液晶に表示されます。</li>
+        <li>「電卓を2台にする」ボタンで左手用の電卓が追加され、演奏の幅が広がります。右手は数字・演算子キー(<code>1234567890</code>など)、左手はキーボードの <code>qweasdzxc</code> で1オクターブ下を演奏できます。</li>
         <li>音色は奇数倍音の加算合成で、倍音ごとにゆっくり揺れる余弦変調をかけています。この「ゆらぎ」が電卓らしいザラついた質感の正体です(「ブレンド」設定で固定)。</li>
       </ul>
       <p class="note">
         ※ このサイトは実機の仕様に関する公開情報(ブログ・製品ページ・検索結果)を基に再現したもので、
         実際のサンプル音源やキー配列と細部が異なる可能性があります。お手元の実機と違いがあれば教えてください。
       </p>
-    </section>
+    </details>
   </main>
   <script src="script.js"></script>
 </body>

@@ -3,6 +3,7 @@
 
   const display = document.getElementById("display");
   const iconNote = document.getElementById("icon-note");
+  const volumeBadge = document.getElementById("volume-badge");
 
   const SOLFEGE = { C: "ド", D: "レ", E: "ミ", F: "ファ", G: "ソ", A: "ラ", B: "シ" };
 
@@ -40,13 +41,13 @@
     btn.appendChild(label);
   });
 
-  // ---------- Volume (5 discrete steps, shown on the LCD) ----------
+  // ---------- Volume (5 discrete steps, shown small in the screen's corner) ----------
   const VOLUME_LEVELS = [0.2, 0.4, 0.6, 0.8, 1.0];
   let volumeIndex = 2;
 
   function renderVolume() {
     const level = volumeIndex + 1;
-    display.textContent = "音量 " + "■".repeat(level) + "□".repeat(VOLUME_LEVELS.length - level);
+    volumeBadge.textContent = "音量 " + "■".repeat(level) + "□".repeat(VOLUME_LEVELS.length - level);
   }
 
   function setVolume(index) {
@@ -56,6 +57,19 @@
   }
 
   renderVolume();
+
+  // ---------- Digit display (cosmetic echo of the last digits typed) ----------
+  let typedDigits = "0";
+  const MAX_TYPED_LEN = 20;
+
+  function renderTyped() {
+    display.textContent = typedDigits;
+  }
+
+  function appendDigit(d) {
+    typedDigits = typedDigits === "0" ? d : (typedDigits + d).slice(-MAX_TYPED_LEN);
+    renderTyped();
+  }
 
   // ---------- Audio ----------
   // Additive engine ported from the AR7778 tone workbench: odd harmonics
@@ -112,13 +126,22 @@
     masterGain.gain.value = VOLUME_LEVELS[volumeIndex];
   }
 
-  let octaveShift = 0; // -1, 0, +1 semitone-octave shift, not currently exposed in the UI
+  // Fine pitch adjustment via the ▼/▲ keys, in semitones (not whole octaves).
+  const CHROMATIC = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+  const MAX_SEMITONE_SHIFT = 2;
+  let semitoneShift = 0;
+
+  function setSemitoneShift(value) {
+    semitoneShift = Math.max(-MAX_SEMITONE_SHIFT, Math.min(MAX_SEMITONE_SHIFT, value));
+  }
 
   function shiftNote(note) {
-    if (octaveShift === 0) return note;
+    if (semitoneShift === 0) return note;
     const [, letter, flat, octaveStr] = note.match(NOTE_RE);
-    const octave = parseInt(octaveStr, 10) + octaveShift;
-    const shifted = letter + flat + octave;
+    let idx = CHROMATIC.indexOf(letter + flat) + semitoneShift;
+    let octave = parseInt(octaveStr, 10) + Math.floor(idx / 12);
+    idx = ((idx % 12) + 12) % 12;
+    const shifted = CHROMATIC[idx] + octave;
     return NOTE_FREQ[shifted] ? shifted : note;
   }
 
@@ -263,9 +286,13 @@
     setTimeout(() => btn.classList.remove("pressed"), 120);
   }
 
-  // Key-down: starts a sustained note, a one-shot click, or a volume step.
+  // Key-down: starts a sustained note, a one-shot click, a volume/transpose
+  // step, and/or echoes a pressed digit to the display (these are independent
+  // of each other - a note key like "1" both plays and echoes).
   function handleKeyDown(btn) {
     pressVisual(btn);
+
+    if (btn.dataset.digit !== undefined) appendDigit(btn.dataset.digit);
 
     if (btn.dataset.note) {
       startVoice(btn, btn.dataset.note);
@@ -275,6 +302,10 @@
       setVolume(volumeIndex - 1);
     } else if (btn.dataset.vol === "up") {
       setVolume(volumeIndex + 1);
+    } else if (btn.dataset.transpose === "down") {
+      setSemitoneShift(semitoneShift - 1);
+    } else if (btn.dataset.transpose === "up") {
+      setSemitoneShift(semitoneShift + 1);
     }
   }
 
@@ -301,6 +332,21 @@
     if (document.hidden) stopAllVoices();
   });
 
+  // ---------- Second calculator (left hand, QWERTY row) ----------
+  // Off by default: two calculators only make sense once you're playing with
+  // both hands on a physical keyboard, so it's opt-in via the toggle button.
+  const calc2 = document.getElementById("calc2");
+  const calcCountToggle = document.getElementById("calcCountToggle");
+  let calc2Enabled = false;
+
+  calcCountToggle.addEventListener("click", () => {
+    calc2Enabled = !calc2Enabled;
+    calc2.hidden = !calc2Enabled;
+    calcCountToggle.textContent = calc2Enabled
+      ? "電卓を1台にする"
+      : "電卓を2台にする(左手用を追加)";
+  });
+
   // ---------- PC keyboard support ----------
   const KEYMAP = {};
   document.querySelectorAll(".key").forEach((btn) => {
@@ -316,11 +362,16 @@
     "=": document.querySelector('[data-eq="="]'),
     Enter: document.querySelector('[data-eq="="]'),
   };
+  const LETTER_KEYMAP = {};
+  document.querySelectorAll("#calc2 .key[data-letter]").forEach((btn) => {
+    LETTER_KEYMAP[btn.dataset.letter] = btn;
+  });
 
   const heldKeys = new Set();
   window.addEventListener("keydown", (e) => {
     if (heldKeys.has(e.key)) return; // ignore OS key-repeat
-    const btn = KEYMAP[e.key] || OP_KEYMAP[e.key];
+    const btn = KEYMAP[e.key] || OP_KEYMAP[e.key] ||
+      (calc2Enabled ? LETTER_KEYMAP[e.key.toLowerCase()] : undefined);
     if (!btn) return;
     heldKeys.add(e.key);
     e.preventDefault();
@@ -329,7 +380,7 @@
   });
   window.addEventListener("keyup", (e) => {
     heldKeys.delete(e.key);
-    const btn = KEYMAP[e.key] || OP_KEYMAP[e.key];
+    const btn = KEYMAP[e.key] || OP_KEYMAP[e.key] || LETTER_KEYMAP[e.key.toLowerCase()];
     if (btn) handleKeyUp(btn);
   });
 })();
