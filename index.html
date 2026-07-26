@@ -81,6 +81,16 @@
             <output id="attackOut" for="attackRange">4</output>
           </label>
           <label class="tune-field">
+            ディケイ(押している間の減衰速さ・ms)
+            <input type="range" id="decayRange" min="30" max="500" step="10" value="200">
+            <output id="decayOut" for="decayRange">200</output>
+          </label>
+          <label class="tune-field">
+            サスティン比 (%)
+            <input type="range" id="sustainRange" min="0" max="80" step="5" value="30">
+            <output id="sustainOut" for="sustainRange">30</output>
+          </label>
+          <label class="tune-field">
             リリース (ms)
             <input type="range" id="releaseRange" min="5" max="150" step="5" value="30">
             <output id="releaseOut" for="releaseRange">30</output>

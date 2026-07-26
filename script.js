@@ -14,6 +14,8 @@
   const peakQRange = document.getElementById("peakQRange");
   const peakGainRange = document.getElementById("peakGainRange");
   const attackRange = document.getElementById("attackRange");
+  const decayRange = document.getElementById("decayRange");
+  const sustainRange = document.getElementById("sustainRange");
   const releaseRange = document.getElementById("releaseRange");
   const clickRange = document.getElementById("clickRange");
   const copySettingsBtn = document.getElementById("copySettings");
@@ -156,9 +158,16 @@
     const gain = ctx.createGain();
     const peak = parseFloat(volumeRange.value);
     const attackSec = parseFloat(attackRange.value) / 1000;
+    const decaySec = parseFloat(decayRange.value) / 1000;
+    const sustainFloor = peak * (parseFloat(sustainRange.value) / 100);
     gain.gain.setValueAtTime(0, now);
     // Near-instant attack: a real buzzer just gets switched on.
     gain.gain.linearRampToValueAtTime(peak, now + attackSec);
+    // A real recording keeps fading even while the key is held (closer to a
+    // struck/plucked envelope than a flat organ-like sustain) - measured
+    // from an actual sample: ~5ms attack, then decaying toward roughly 30%
+    // of peak over a couple hundred ms.
+    gain.gain.setTargetAtTime(sustainFloor, now + attackSec, decaySec);
 
     osc.connect(highpass).connect(peak_filter).connect(gain).connect(ctx.destination);
     osc.start(now);
@@ -421,6 +430,8 @@
     [peakQRange, "peakQOut", 1],
     [peakGainRange, "peakGainOut", 1],
     [attackRange, "attackOut", 0],
+    [decayRange, "decayOut", 0],
+    [sustainRange, "sustainOut", 0],
     [releaseRange, "releaseOut", 0],
     [clickRange, "clickOut", 2],
   ];
@@ -436,7 +447,8 @@
       `wave=${waveSelect.value} duty=${dutyRange.value} ` +
       `highpass=${highpassRange.value}Hz peakFreq=${peakFreqRange.value}Hz ` +
       `peakQ=${peakQRange.value} peakGain=${peakGainRange.value}dB ` +
-      `attack=${attackRange.value}ms release=${releaseRange.value}ms ` +
+      `attack=${attackRange.value}ms decay=${decayRange.value}ms ` +
+      `sustain=${sustainRange.value}% release=${releaseRange.value}ms ` +
       `click=${clickRange.value}`
     );
   }
