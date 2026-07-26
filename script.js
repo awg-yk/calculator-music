@@ -152,10 +152,12 @@
     nodes.masterGain.gain.value = VOLUME_LEVELS[calcState.get(calcEl).volumeIndex];
   }
 
-  // Fine pitch adjustment via the ▼/▲ keys, in semitones (not whole octaves).
-  // Each calculator has its own transpose, applied only to its own notes.
+  // Fine pitch adjustment via the ▼/▲ keys, in semitones. Each calculator
+  // starts at the same pitch as the other and has its own transpose, so a
+  // full octave of headroom lets the user spread the two calculators apart
+  // (or not) to taste rather than baking in a fixed offset.
   const CHROMATIC = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
-  const MAX_SEMITONE_SHIFT = 2;
+  const MAX_SEMITONE_SHIFT = 12;
 
   function setSemitoneShift(calcEl, value) {
     const state = calcState.get(calcEl);
