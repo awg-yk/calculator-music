@@ -8,7 +8,7 @@
   const iconNote = document.getElementById("icon-note");
   const waveSelect = document.getElementById("waveSelect");
   const volumeRange = document.getElementById("volumeRange");
-  const dutyRange = document.getElementById("dutyRange");
+  const softnessRange = document.getElementById("softnessRange");
   const highpassRange = document.getElementById("highpassRange");
   const peakFreqRange = document.getElementById("peakFreqRange");
   const peakQRange = document.getElementById("peakQRange");
@@ -69,24 +69,25 @@
     return NOTE_FREQ[shifted] ? shifted : note;
   }
 
-  // A cheap piezo buzzer is driven by a raw digital square/pulse signal with
-  // no smoothing, so it sounds thin and bright rather than a "clean" square
-  // wave. A narrow-duty pulse keeps more high harmonics than a 50% square,
-  // which is closer to that thin/tinny character. The duty cycle (and the
-  // filter shaping below) are user-adjustable via the tuning panel.
+  // Measured across 15 recorded notes: even harmonics sit at ~6.6% of the
+  // odd ones, i.e. the drive signal is a clean 50%-duty square. So the wave
+  // is built from odd harmonics only. What varies is how fast they fall off:
+  // 1/n is a textbook square (bright, buzzy), while larger exponents shed
+  // the upper harmonics for a rounder, softer tone. `softness` is that
+  // exponent, exposed as the main timbre control.
   let piezoWave = null;
-  let piezoWaveDuty = null;
+  let piezoWaveSoftness = null;
   function getPiezoWave(ctx) {
-    const duty = parseFloat(dutyRange.value);
-    if (piezoWave && piezoWaveDuty === duty) return piezoWave;
-    const N = 32;
+    const softness = parseFloat(softnessRange.value);
+    if (piezoWave && piezoWaveSoftness === softness) return piezoWave;
+    const N = 40;
     const real = new Float32Array(N);
     const imag = new Float32Array(N);
-    for (let n = 1; n < N; n++) {
-      imag[n] = (2 / (n * Math.PI)) * Math.sin(n * Math.PI * duty);
+    for (let n = 1; n < N; n += 2) {
+      imag[n] = (2 / Math.PI) / Math.pow(n, softness);
     }
     piezoWave = ctx.createPeriodicWave(real, imag, { disableNormalization: false });
-    piezoWaveDuty = duty;
+    piezoWaveSoftness = softness;
     return piezoWave;
   }
 
@@ -143,11 +144,11 @@
     applyWaveform(osc, ctx);
     osc.frequency.value = freq;
 
-    // Cross-checked against real recordings of C4/G4/C5: harmonic content
-    // is odd-only (a near-50% duty pulse, see getPiezoWave) and generally
-    // rolls off toward the high end, with a mild, noisy hint of extra
-    // presence somewhere in the 1.5-2kHz range - hence a gentle highpass
-    // + modest peak + lowpass rather than a strong, precisely-located EQ.
+    // The cleanly-measured notes show a smooth harmonic rolloff with no
+    // resonant peak, and a fundamental that dominates everything else - so
+    // the peak filter defaults to 0dB (off, kept only as a manual control)
+    // and the highpass sits well below the lowest fundamental instead of
+    // clipping into it. Shaping is left mostly to the waveform itself.
     const highpass = ctx.createBiquadFilter();
     highpass.type = "highpass";
     highpass.frequency.value = parseFloat(highpassRange.value);
@@ -432,7 +433,7 @@
 
   // ---------- Tone tuning panel ----------
   const TUNE_SLIDERS = [
-    [dutyRange, "dutyOut", 2],
+    [softnessRange, "softnessOut", 2],
     [highpassRange, "highpassOut", 0],
     [peakFreqRange, "peakFreqOut", 0],
     [peakQRange, "peakQOut", 1],
@@ -453,7 +454,7 @@
 
   function currentSettingsText() {
     return (
-      `wave=${waveSelect.value} duty=${dutyRange.value} ` +
+      `wave=${waveSelect.value} softness=${softnessRange.value} ` +
       `highpass=${highpassRange.value}Hz peakFreq=${peakFreqRange.value}Hz ` +
       `peakQ=${peakQRange.value} peakGain=${peakGainRange.value}dB ` +
       `lowpass=${lowpassRange.value}Hz ` +

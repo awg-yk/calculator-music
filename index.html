@@ -44,6 +44,11 @@
             音量
             <input type="range" id="volumeRange" min="0" max="1" step="0.01" value="0.5">
           </label>
+          <label class="tone-field">
+            やわらかさ
+            <input type="range" id="softnessRange" min="1" max="2.5" step="0.05" value="1.3">
+            <output id="softnessOut" for="softnessRange">1.30</output>
+          </label>
         </div>
       </div>
 
@@ -51,14 +56,9 @@
         <summary>音色を詳しく調整</summary>
         <div class="tune-grid">
           <label class="tune-field">
-            パルス幅 (duty)
-            <input type="range" id="dutyRange" min="0.05" max="0.5" step="0.01" value="0.5">
-            <output id="dutyOut" for="dutyRange">0.50</output>
-          </label>
-          <label class="tune-field">
             ハイパス カットオフ (Hz)
-            <input type="range" id="highpassRange" min="20" max="1200" step="10" value="220">
-            <output id="highpassOut" for="highpassRange">220</output>
+            <input type="range" id="highpassRange" min="20" max="1200" step="10" value="60">
+            <output id="highpassOut" for="highpassRange">60</output>
           </label>
           <label class="tune-field">
             ピーク周波数 (Hz)
@@ -72,18 +72,18 @@
           </label>
           <label class="tune-field">
             ピークゲイン (dB)
-            <input type="range" id="peakGainRange" min="0" max="24" step="0.5" value="3">
-            <output id="peakGainOut" for="peakGainRange">3</output>
+            <input type="range" id="peakGainRange" min="0" max="24" step="0.5" value="0">
+            <output id="peakGainOut" for="peakGainRange">0</output>
           </label>
           <label class="tune-field">
             ローパス カットオフ (Hz)
-            <input type="range" id="lowpassRange" min="1000" max="10000" step="100" value="3500">
-            <output id="lowpassOut" for="lowpassRange">3500</output>
+            <input type="range" id="lowpassRange" min="1000" max="10000" step="100" value="3000">
+            <output id="lowpassOut" for="lowpassRange">3000</output>
           </label>
           <label class="tune-field">
             アタック (ms)
-            <input type="range" id="attackRange" min="1" max="50" step="1" value="4">
-            <output id="attackOut" for="attackRange">4</output>
+            <input type="range" id="attackRange" min="1" max="50" step="1" value="7">
+            <output id="attackOut" for="attackRange">7</output>
           </label>
           <label class="tune-field">
             ディケイ(押している間の減衰速さ・ms)
@@ -102,8 +102,8 @@
           </label>
           <label class="tune-field">
             アタックのクリック感
-            <input type="range" id="clickRange" min="0" max="1" step="0.05" value="0.35">
-            <output id="clickOut" for="clickRange">0.35</output>
+            <input type="range" id="clickRange" min="0" max="1" step="0.05" value="0">
+            <output id="clickOut" for="clickRange">0.00</output>
           </label>
         </div>
         <div class="tune-actions">
@@ -155,7 +155,8 @@
         <li>キーを押している間だけ音が鳴ります(実機と同じで、長押しすれば音を伸ばせます)。</li>
         <li>PCキーボードでも演奏できます:数字キー <code>1234567890</code>、記号キー <code>+ - * / =</code> に対応。</li>
         <li>スマホ・タブレットではマルチタッチ対応なので、和音っぽく複数キー同時押しも可能です。</li>
-        <li>音色は「ピエゾ風」がデフォルトで、実機のピエゾブザーに近づけた近似音です(square/triangle/sineも選べます)。音量は上部のスライダーで調整できます。</li>
+        <li>音色は「ピエゾ風」がデフォルトで、実機のピエゾブザーに近づけた近似音です(square/triangle/sineも選べます)。</li>
+        <li><b>やわらかさ</b>スライダーが音色の一番効く調整です。左に回すほど倍音が多くブザーらしい硬い音、右に回すほど倍音が減って丸く柔らかい音になります。</li>
         <li>演奏モードでない時は、ふつうの電卓として四則演算・%・√・メモリー機能が使えます。</li>
       </ul>
       <p class="note">
