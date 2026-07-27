@@ -42,12 +42,18 @@ h1 {
   max-width: 480px;
 }
 
+/* Stacked (narrow screens): calc1 on top, calc2 below.
+   Side by side (wide screens, media query further down): calc2 on the
+   left, calc1 on the right. flex `order` (not DOM order) controls this so
+   the two layouts can disagree about which comes "first". */
 .calc-row {
   display: flex;
+  flex-direction: column;
   justify-content: center;
   gap: 16px;
-  flex-wrap: wrap;
 }
+#calc { order: 1; }
+#calc2 { order: 2; }
 
 .calc {
   background: linear-gradient(180deg, var(--calc-body), var(--calc-body-dark));
@@ -257,4 +263,14 @@ h1 {
 @media (max-width: 380px) {
   .display { font-size: 1.1rem; }
   .key { font-size: 1rem; padding: 14px 0; }
+}
+
+/* Enough width for both calculators (480px each + gap) to sit side by side. */
+@media (min-width: 1000px) {
+  .calc-row {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  #calc2 { order: 1; }
+  #calc { order: 2; }
 }
