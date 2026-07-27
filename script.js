@@ -19,34 +19,6 @@
 
   const NOTE_RE = /^([A-G])(b?)(\d)$/;
 
-  // ---------- TEMPORARY diagnostic panel ----------
-  // Helps pin down the reported "note keeps sounding on calc2" bug. Keeps a
-  // rolling log of recent keyboard/voice events (not just the latest one),
-  // since by the time a stuck note is noticed, a single "last event" field
-  // has usually already been overwritten by later presses. Safe to delete
-  // once the cause is found.
-  const debugPanel = document.getElementById("debugPanel");
-  const eventHistory = [];
-  const MAX_HISTORY = 50;
-  let lastBufferInfo = "(none yet)";
-  function logEvent(line) {
-    eventHistory.push(`${performance.now().toFixed(0)}ms  ${line}`);
-    if (eventHistory.length > MAX_HISTORY) eventHistory.shift();
-    renderDebug();
-  }
-  function renderDebug() {
-    if (!debugPanel) return;
-    const held = Array.from(heldKeys).join(", ") || "(none)";
-    const voices = Array.from(activeVoices.entries())
-      .map(([btn, v]) => `${btn.closest(".calc").id}/${btn.dataset.note || btn.textContent.trim()} via ${v.source}`)
-      .join(", ") || "(none)";
-    debugPanel.textContent =
-      `[debug] held keys: ${held}  |  active voices: ${voices}  |  last buffer: ${lastBufferInfo}\n` +
-      `---- recent events (oldest first, scroll up for more) ----\n` +
-      eventHistory.join("\n");
-    debugPanel.scrollTop = debugPanel.scrollHeight;
-  }
-
   // Each calculator gets its own volume and transpose state (and, further
   // down, its own audio nodes) - they used to share one, which linked the
   // two calculators' controls together.
@@ -227,11 +199,7 @@
     const { tilt, depth, rate } = TONE;
     const key = `${freq}|${tilt}|${depth}|${rate}`;
     const cached = bufferCache.get(key);
-    if (cached) {
-      lastBufferInfo = `cached (${bufferCache.size} in cache)`;
-      return cached;
-    }
-    const buildStart = performance.now();
+    if (cached) return cached;
 
     const sr = ctx.sampleRate;
     const N = Math.round(BUFFER_SEC * sr);
@@ -265,7 +233,6 @@
 
     if (bufferCache.size > 48) bufferCache.clear();
     bufferCache.set(key, buffer);
-    lastBufferInfo = `BUILT in ${(performance.now() - buildStart).toFixed(1)}ms (${bufferCache.size} in cache)`;
     return buffer;
   }
 
@@ -299,19 +266,24 @@
     gain.connect(calcAudioNodes.get(calcEl).dipFilter);
     src.start(now);
 
-    // Safety backstop: if a release is ever missed (seen occasionally on the
-    // second calculator, likely a lost pointer-capture event), force the
-    // note off soon rather than let it loop indefinitely. Kept short since a
-    // normal release only takes ~0.5s (RELEASE_SEC below) - this only exists
-    // to bound the worst case.
+    // Safety backstop: if a release is ever missed (confirmed to happen
+    // occasionally on the second calculator - the browser never delivers a
+    // keyup for that key at all, most likely a keyboard/OS-level limitation
+    // rather than anything fixable here), force the note off soon rather
+    // than let it loop indefinitely. Kept short since a normal release only
+    // takes ~0.5s (RELEASE_SEC below) - this only exists to bound the worst
+    // case. Also clears the matching heldKeys entry, if any, so a keyboard
+    // key that never got its release doesn't stay stuck as "held" forever
+    // (which would otherwise silently block that key from playing again).
     const MAX_HOLD_MS = 2000;
     const safetyTimer = setTimeout(() => {
-      logEvent(`SAFETY-TIMEOUT firing for ${calcEl.id}/${actualNote} (no release seen in ${MAX_HOLD_MS}ms)`);
       stopVoice(voiceId);
+      if (source && source.startsWith("key:")) {
+        heldKeys.delete(normalizeKey(source.slice(4)));
+      }
     }, MAX_HOLD_MS);
 
-    activeVoices.set(voiceId, { src, gain, safetyTimer, source: source || "?" });
-    logEvent(`START ${calcEl.id}/${actualNote} via ${source || "?"} (buffer: ${lastBufferInfo})`);
+    activeVoices.set(voiceId, { src, gain, safetyTimer });
 
     const iconNote = calcEl.querySelector(".note-name");
     iconNote.textContent = noteLabel(actualNote) + " (" + actualNote + ")";
@@ -330,7 +302,6 @@
     voice.gain.gain.exponentialRampToValueAtTime(0.0001, now + RELEASE_SEC);
     voice.src.stop(now + RELEASE_SEC + 0.03);
     activeVoices.delete(voiceId);
-    logEvent(`STOP  ${voiceId.closest(".calc").id}/${voiceId.dataset.note} (was via ${voice.source})`);
 
     const calcEl = voiceId.closest(".calc");
     const stillPlaying = Array.from(activeVoices.keys()).some((b) => b.closest(".calc") === calcEl);
@@ -497,14 +468,10 @@
   const heldKeys = new Set();
   window.addEventListener("keydown", (e) => {
     const token = normalizeKey(e.key);
-    const alreadyHeld = heldKeys.has(token);
-    const btn = alreadyHeld ? null : (KEYMAP[e.key] || OP_KEYMAP[e.key] || CALC1_KEYMAP[token] ||
-      (calc2Enabled ? CALC2_KEYMAP[token] : undefined));
-    const matched = alreadyHeld
-      ? "IGNORED (already in heldKeys)"
-      : btn ? `${btn.closest(".calc").id}/${btn.dataset.note || btn.textContent.trim()}` : "no match";
-    logEvent(`DOWN key="${e.key}" code="${e.code}" repeat=${e.repeat} composing=${e.isComposing} calc2Enabled=${calc2Enabled} -> ${matched}`);
-    if (alreadyHeld || !btn) return;
+    if (heldKeys.has(token)) return; // ignore OS key-repeat
+    const btn = KEYMAP[e.key] || OP_KEYMAP[e.key] || CALC1_KEYMAP[token] ||
+      (calc2Enabled ? CALC2_KEYMAP[token] : undefined);
+    if (!btn) return;
     heldKeys.add(token);
     e.preventDefault();
     getCtx();
@@ -512,12 +479,8 @@
   });
   window.addEventListener("keyup", (e) => {
     const token = normalizeKey(e.key);
-    const btn = KEYMAP[e.key] || OP_KEYMAP[e.key] || CALC1_KEYMAP[token] || CALC2_KEYMAP[token];
-    const matched = btn ? `${btn.closest(".calc").id}/${btn.dataset.note || btn.textContent.trim()}` : "no match";
-    logEvent(`UP   key="${e.key}" code="${e.code}" -> ${matched}`);
     heldKeys.delete(token);
+    const btn = KEYMAP[e.key] || OP_KEYMAP[e.key] || CALC1_KEYMAP[token] || CALC2_KEYMAP[token];
     if (btn) handleKeyUp(btn);
   });
-
-  renderDebug();
 })();
