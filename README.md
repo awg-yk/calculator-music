@@ -2,7 +2,7 @@
 
 演奏ができる電卓 — 数字・演算子キーがそのまま鍵盤になる、電卓型の音楽玩具をブラウザで再現したものです。
 
-🔗 **Demo:** https://awg-yk.github.io/calculator-music/
+🔗 **https://awg-yk.github.io/calculator-music/**
 
 ## 概要
 
