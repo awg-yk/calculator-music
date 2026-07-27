@@ -26,6 +26,7 @@
   // looking clean. Safe to delete once the cause is found.
   const debugPanel = document.getElementById("debugPanel");
   let lastKeyEvent = "(none yet)";
+  let lastBufferInfo = "(none yet)";
   function logKeyEvent(type, e) {
     lastKeyEvent = `${type} key="${e.key}" code="${e.code}" repeat=${e.repeat} isComposing=${e.isComposing}`;
     renderDebug();
@@ -37,7 +38,7 @@
       .map(([btn, v]) => `${btn.closest(".calc").id}/${btn.dataset.note || btn.textContent.trim()} via ${v.source}`)
       .join("\n  ") || "(none)";
     debugPanel.textContent =
-      `[debug] last event: ${lastKeyEvent}\nheld keys: ${held}\nactive voices:\n  ${voices}`;
+      `[debug] last event: ${lastKeyEvent}\nlast buffer: ${lastBufferInfo}\nheld keys: ${held}\nactive voices:\n  ${voices}`;
   }
 
   // Each calculator gets its own volume and transpose state (and, further
@@ -220,7 +221,11 @@
     const { tilt, depth, rate } = TONE;
     const key = `${freq}|${tilt}|${depth}|${rate}`;
     const cached = bufferCache.get(key);
-    if (cached) return cached;
+    if (cached) {
+      lastBufferInfo = `cached (${bufferCache.size} in cache)`;
+      return cached;
+    }
+    const buildStart = performance.now();
 
     const sr = ctx.sampleRate;
     const N = Math.round(BUFFER_SEC * sr);
@@ -254,6 +259,7 @@
 
     if (bufferCache.size > 48) bufferCache.clear();
     bufferCache.set(key, buffer);
+    lastBufferInfo = `BUILT in ${(performance.now() - buildStart).toFixed(1)}ms (${bufferCache.size} in cache)`;
     return buffer;
   }
 
