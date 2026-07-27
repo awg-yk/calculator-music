@@ -93,5 +93,16 @@ amp = 1 / (n + 1) ^ tilt        // tilt = 1.15
 このサイトは実機の仕様に関する公開情報(ブログ・製品ページ・検索結果)をもとに再現したものです。実際のサンプル音源やキー配列と細部が異なる可能性があります。
 
 ## ライセンス
+このプロジェクトのソースコードは MIT License のもとで公開しています。
 
-未設定
+- このプロジェクトは AR-7778 を参考に制作した非公式のファンメイド作品です。
+- 音色は実機を解析して独自に実装したものであり、録音データや音源ファイルは使用していません。
+- 本プロジェクトはメーカーとは一切関係ありません。
+- 「AR-7778」などの製品名・商標は、それぞれの権利者に帰属します。
+
+The source code of this project is licensed under the MIT License.
+
+- This project is an unofficial fan-made recreation inspired by the AR-7778 calculator.
+- The sound has been independently implemented based on analysis of the original device. No recordings or audio files from the original device are used.
+- This project is not affiliated with, endorsed by, or sponsored by the original manufacturer.
+- "AR-7778" and other product names and trademarks are the property of their respective owners.
