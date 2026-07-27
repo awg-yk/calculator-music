@@ -19,6 +19,27 @@
 
   const NOTE_RE = /^([A-G])(b?)(\d)$/;
 
+  // ---------- TEMPORARY diagnostic panel ----------
+  // Helps pin down the reported "note keeps sounding on calc2" bug: shows
+  // whether the release event is truly missing (heldKeys/activeVoices stay
+  // non-empty) or whether the audio itself fails to stop despite our state
+  // looking clean. Safe to delete once the cause is found.
+  const debugPanel = document.getElementById("debugPanel");
+  let lastKeyEvent = "(none yet)";
+  function logKeyEvent(type, e) {
+    lastKeyEvent = `${type} key="${e.key}" code="${e.code}" repeat=${e.repeat} isComposing=${e.isComposing}`;
+    renderDebug();
+  }
+  function renderDebug() {
+    if (!debugPanel) return;
+    const held = Array.from(heldKeys).join(", ") || "(none)";
+    const voices = Array.from(activeVoices.entries())
+      .map(([btn, v]) => `${btn.closest(".calc").id}/${btn.dataset.note || btn.textContent.trim()} via ${v.source}`)
+      .join("\n  ") || "(none)";
+    debugPanel.textContent =
+      `[debug] last event: ${lastKeyEvent}\nheld keys: ${held}\nactive voices:\n  ${voices}`;
+  }
+
   // Each calculator gets its own volume and transpose state (and, further
   // down, its own audio nodes) - they used to share one, which linked the
   // two calculators' controls together.
@@ -240,7 +261,7 @@
   // key can be held (sustained) and multiple keys can sound at once.
   const activeVoices = new Map();
 
-  function startVoice(voiceId, note) {
+  function startVoice(voiceId, note, source) {
     if (activeVoices.has(voiceId)) return;
     const calcEl = voiceId.closest(".calc");
     const ctx = getCtx();
@@ -274,7 +295,8 @@
     const MAX_HOLD_MS = 2000;
     const safetyTimer = setTimeout(() => stopVoice(voiceId), MAX_HOLD_MS);
 
-    activeVoices.set(voiceId, { src, gain, safetyTimer });
+    activeVoices.set(voiceId, { src, gain, safetyTimer, source: source || "?" });
+    renderDebug();
 
     const iconNote = calcEl.querySelector(".note-name");
     iconNote.textContent = noteLabel(actualNote) + " (" + actualNote + ")";
@@ -293,6 +315,7 @@
     voice.gain.gain.exponentialRampToValueAtTime(0.0001, now + RELEASE_SEC);
     voice.src.stop(now + RELEASE_SEC + 0.03);
     activeVoices.delete(voiceId);
+    renderDebug();
 
     const calcEl = voiceId.closest(".calc");
     const stillPlaying = Array.from(activeVoices.keys()).some((b) => b.closest(".calc") === calcEl);
@@ -330,7 +353,7 @@
   // echoes a pressed digit to the display (these are independent of each
   // other - a note key like "1" both plays and echoes). "0" is purely
   // decorative: it does not echo, and it makes no sound.
-  function handleKeyDown(btn) {
+  function handleKeyDown(btn, source) {
     pressVisual(btn);
 
     if (btn.dataset.digit !== undefined && btn.dataset.digit !== "0") {
@@ -338,7 +361,7 @@
     }
 
     if (btn.dataset.note) {
-      startVoice(btn, btn.dataset.note);
+      startVoice(btn, btn.dataset.note, source);
       return;
     }
 
@@ -370,7 +393,7 @@
       btn.setPointerCapture(e.pointerId);
       pointerVoices.set(e.pointerId, btn);
       getCtx();
-      handleKeyDown(btn);
+      handleKeyDown(btn, "pointer");
     });
     btn.addEventListener("pointerup", () => handleKeyUp(btn));
     btn.addEventListener("pointercancel", () => handleKeyUp(btn));
@@ -458,6 +481,7 @@
   // still clears correctly instead of leaving the key stuck as "held".
   const heldKeys = new Set();
   window.addEventListener("keydown", (e) => {
+    logKeyEvent("keydown", e);
     const token = normalizeKey(e.key);
     if (heldKeys.has(token)) return; // ignore OS key-repeat
     const btn = KEYMAP[e.key] || OP_KEYMAP[e.key] || CALC1_KEYMAP[token] ||
@@ -466,12 +490,17 @@
     heldKeys.add(token);
     e.preventDefault();
     getCtx();
-    handleKeyDown(btn);
+    handleKeyDown(btn, "key:" + e.key);
+    renderDebug();
   });
   window.addEventListener("keyup", (e) => {
+    logKeyEvent("keyup", e);
     const token = normalizeKey(e.key);
     heldKeys.delete(token);
     const btn = KEYMAP[e.key] || OP_KEYMAP[e.key] || CALC1_KEYMAP[token] || CALC2_KEYMAP[token];
     if (btn) handleKeyUp(btn);
+    renderDebug();
   });
+
+  renderDebug();
 })();
