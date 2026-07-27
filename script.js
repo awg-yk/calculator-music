@@ -20,15 +20,18 @@
   const NOTE_RE = /^([A-G])(b?)(\d)$/;
 
   // ---------- TEMPORARY diagnostic panel ----------
-  // Helps pin down the reported "note keeps sounding on calc2" bug: shows
-  // whether the release event is truly missing (heldKeys/activeVoices stay
-  // non-empty) or whether the audio itself fails to stop despite our state
-  // looking clean. Safe to delete once the cause is found.
+  // Helps pin down the reported "note keeps sounding on calc2" bug. Keeps a
+  // rolling log of recent keyboard/voice events (not just the latest one),
+  // since by the time a stuck note is noticed, a single "last event" field
+  // has usually already been overwritten by later presses. Safe to delete
+  // once the cause is found.
   const debugPanel = document.getElementById("debugPanel");
-  let lastKeyEvent = "(none yet)";
+  const eventHistory = [];
+  const MAX_HISTORY = 50;
   let lastBufferInfo = "(none yet)";
-  function logKeyEvent(type, e) {
-    lastKeyEvent = `${type} key="${e.key}" code="${e.code}" repeat=${e.repeat} isComposing=${e.isComposing}`;
+  function logEvent(line) {
+    eventHistory.push(`${performance.now().toFixed(0)}ms  ${line}`);
+    if (eventHistory.length > MAX_HISTORY) eventHistory.shift();
     renderDebug();
   }
   function renderDebug() {
@@ -36,9 +39,12 @@
     const held = Array.from(heldKeys).join(", ") || "(none)";
     const voices = Array.from(activeVoices.entries())
       .map(([btn, v]) => `${btn.closest(".calc").id}/${btn.dataset.note || btn.textContent.trim()} via ${v.source}`)
-      .join("\n  ") || "(none)";
+      .join(", ") || "(none)";
     debugPanel.textContent =
-      `[debug] last event: ${lastKeyEvent}\nlast buffer: ${lastBufferInfo}\nheld keys: ${held}\nactive voices:\n  ${voices}`;
+      `[debug] held keys: ${held}  |  active voices: ${voices}  |  last buffer: ${lastBufferInfo}\n` +
+      `---- recent events (oldest first, scroll up for more) ----\n` +
+      eventHistory.join("\n");
+    debugPanel.scrollTop = debugPanel.scrollHeight;
   }
 
   // Each calculator gets its own volume and transpose state (and, further
@@ -299,10 +305,13 @@
     // normal release only takes ~0.5s (RELEASE_SEC below) - this only exists
     // to bound the worst case.
     const MAX_HOLD_MS = 2000;
-    const safetyTimer = setTimeout(() => stopVoice(voiceId), MAX_HOLD_MS);
+    const safetyTimer = setTimeout(() => {
+      logEvent(`SAFETY-TIMEOUT firing for ${calcEl.id}/${actualNote} (no release seen in ${MAX_HOLD_MS}ms)`);
+      stopVoice(voiceId);
+    }, MAX_HOLD_MS);
 
     activeVoices.set(voiceId, { src, gain, safetyTimer, source: source || "?" });
-    renderDebug();
+    logEvent(`START ${calcEl.id}/${actualNote} via ${source || "?"} (buffer: ${lastBufferInfo})`);
 
     const iconNote = calcEl.querySelector(".note-name");
     iconNote.textContent = noteLabel(actualNote) + " (" + actualNote + ")";
@@ -321,7 +330,7 @@
     voice.gain.gain.exponentialRampToValueAtTime(0.0001, now + RELEASE_SEC);
     voice.src.stop(now + RELEASE_SEC + 0.03);
     activeVoices.delete(voiceId);
-    renderDebug();
+    logEvent(`STOP  ${voiceId.closest(".calc").id}/${voiceId.dataset.note} (was via ${voice.source})`);
 
     const calcEl = voiceId.closest(".calc");
     const stillPlaying = Array.from(activeVoices.keys()).some((b) => b.closest(".calc") === calcEl);
@@ -487,25 +496,27 @@
   // still clears correctly instead of leaving the key stuck as "held".
   const heldKeys = new Set();
   window.addEventListener("keydown", (e) => {
-    logKeyEvent("keydown", e);
     const token = normalizeKey(e.key);
-    if (heldKeys.has(token)) return; // ignore OS key-repeat
-    const btn = KEYMAP[e.key] || OP_KEYMAP[e.key] || CALC1_KEYMAP[token] ||
-      (calc2Enabled ? CALC2_KEYMAP[token] : undefined);
-    if (!btn) return;
+    const alreadyHeld = heldKeys.has(token);
+    const btn = alreadyHeld ? null : (KEYMAP[e.key] || OP_KEYMAP[e.key] || CALC1_KEYMAP[token] ||
+      (calc2Enabled ? CALC2_KEYMAP[token] : undefined));
+    const matched = alreadyHeld
+      ? "IGNORED (already in heldKeys)"
+      : btn ? `${btn.closest(".calc").id}/${btn.dataset.note || btn.textContent.trim()}` : "no match";
+    logEvent(`DOWN key="${e.key}" code="${e.code}" repeat=${e.repeat} composing=${e.isComposing} calc2Enabled=${calc2Enabled} -> ${matched}`);
+    if (alreadyHeld || !btn) return;
     heldKeys.add(token);
     e.preventDefault();
     getCtx();
     handleKeyDown(btn, "key:" + e.key);
-    renderDebug();
   });
   window.addEventListener("keyup", (e) => {
-    logKeyEvent("keyup", e);
     const token = normalizeKey(e.key);
-    heldKeys.delete(token);
     const btn = KEYMAP[e.key] || OP_KEYMAP[e.key] || CALC1_KEYMAP[token] || CALC2_KEYMAP[token];
+    const matched = btn ? `${btn.closest(".calc").id}/${btn.dataset.note || btn.textContent.trim()}` : "no match";
+    logEvent(`UP   key="${e.key}" code="${e.code}" -> ${matched}`);
+    heldKeys.delete(token);
     if (btn) handleKeyUp(btn);
-    renderDebug();
   });
 
   renderDebug();
