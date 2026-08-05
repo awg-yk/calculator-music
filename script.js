@@ -89,6 +89,17 @@
     calcEl.querySelector(".display").textContent = next;
   }
 
+  // Operators/equals echo to the display too, appended onto whatever's
+  // already shown (mirrors appendDigit, but always appends - even onto a
+  // lone "0" - since "0+" etc. are meaningful to show).
+  function appendSymbol(btn, symbol) {
+    const calcEl = btn.closest(".calc");
+    const current = typedDigits.get(calcEl) || "0";
+    const next = (current + symbol).slice(-MAX_TYPED_LEN);
+    typedDigits.set(calcEl, next);
+    calcEl.querySelector(".display").textContent = next;
+  }
+
   // ---------- Audio ----------
   // Additive engine ported from the AR7778 tone workbench: odd harmonics
   // with amplitude 1/(n+1)^tilt, each one slowly amplitude-modulated at
@@ -344,6 +355,12 @@
 
     if (btn.dataset.digit !== undefined && btn.dataset.digit !== "0") {
       appendDigit(btn, btn.dataset.digit);
+    }
+
+    if (btn.dataset.op) {
+      appendSymbol(btn, btn.dataset.op);
+    } else if (btn.dataset.eq) {
+      appendSymbol(btn, btn.dataset.eq);
     }
 
     if (btn.dataset.note) {
